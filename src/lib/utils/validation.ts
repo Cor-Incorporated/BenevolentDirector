@@ -33,6 +33,15 @@ export const changeRequestReproducibilitySchema = z.enum([
   'not_confirmed',
   'unknown',
 ])
+export const intakeIntentTypeSchema = z.enum([
+  'bug_report',
+  'fix_request',
+  'feature_addition',
+  'scope_change',
+  'account_task',
+  'billing_risk',
+  'other',
+])
 export const internalRoleSchema = z.enum(['admin', 'sales', 'dev'])
 
 export const projectPrioritySchema = z.enum(['low', 'medium', 'high', 'critical'])
@@ -89,6 +98,34 @@ export const changeRequestSchema = z.object({
   reproducibility: changeRequestReproducibilitySchema.default('unknown'),
   requested_by_name: z.string().min(1).max(120).optional(),
   requested_by_email: z.string().email().optional(),
+})
+
+export const intakeSourceSchema = z.object({
+  channel: z.string().min(1).max(80).default('web_app'),
+  message_id: z.string().min(1).max(200).optional(),
+  thread_id: z.string().min(1).max(200).optional(),
+  actor_name: z.string().min(1).max(120).optional(),
+  actor_email: z.string().email().optional(),
+  event_at: z.string().datetime().optional(),
+})
+
+export const intakeParseRequestSchema = z.object({
+  project_id: z.string().uuid(),
+  message: z.string().min(3).max(20000),
+  source: intakeSourceSchema.optional(),
+})
+
+export const intakeIngestRequestSchema = intakeParseRequestSchema.extend({
+  requested_by_name: z.string().min(1).max(120).optional(),
+  requested_by_email: z.string().email().optional(),
+  minimum_completeness: z.number().int().min(0).max(100).optional(),
+})
+
+export const intakeFollowUpRequestSchema = z.object({
+  intent_type: intakeIntentTypeSchema,
+  title: z.string().min(1).max(200).optional(),
+  summary: z.string().min(1).max(5000).optional(),
+  missing_fields: z.array(z.string().min(1).max(80)).min(1),
 })
 
 export const changeRequestEstimateSchema = z.object({
@@ -185,6 +222,10 @@ export type PricingPolicyInput = z.infer<typeof pricingPolicySchema>
 export type MarketEvidenceRequestInput = z.infer<typeof marketEvidenceRequestSchema>
 export type ChangeRequestInput = z.infer<typeof changeRequestSchema>
 export type ChangeRequestEstimateInput = z.infer<typeof changeRequestEstimateSchema>
+export type IntakeParseRequestInput = z.infer<typeof intakeParseRequestSchema>
+export type IntakeIngestRequestInput = z.infer<typeof intakeIngestRequestSchema>
+export type IntakeFollowUpRequestInput = z.infer<typeof intakeFollowUpRequestSchema>
+export type IntakeSourceInput = z.infer<typeof intakeSourceSchema>
 export type DataSourceInput = z.infer<typeof dataSourceSchema>
 export type ApprovalRequestCreateInput = z.infer<typeof approvalRequestCreateSchema>
 export type ApprovalRequestUpdateInput = z.infer<typeof approvalRequestUpdateSchema>

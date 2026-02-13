@@ -255,7 +255,7 @@ export async function canAccessAdminArea(
   email?: string | null
 ): Promise<boolean> {
   const internalRoles = await getInternalRoles(supabase, clerkUserId, email)
-  return internalRoles.size > 0
+  return internalRoles.has('admin')
 }
 
 export function canResolveApprovalRequestByRole(input: {

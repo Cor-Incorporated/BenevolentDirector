@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
+  canAccessAdminArea,
   canResolveApprovalRequestByRole,
   getInternalRoles,
   isAdminUser,
@@ -155,5 +156,24 @@ describe('canResolveApprovalRequestByRole', () => {
     })
 
     expect(allowed).toBe(false)
+  })
+})
+
+describe('canAccessAdminArea', () => {
+  it('allows only admin role', async () => {
+    const adminAllowed = await canAccessAdminArea(
+      createSupabaseMock({ admins: true }),
+      'user_admin',
+      'admin@example.com'
+    )
+
+    const salesDenied = await canAccessAdminArea(
+      createSupabaseMock({ admins: false, teamMemberRoles: ['sales'] }),
+      'user_sales',
+      'sales@example.com'
+    )
+
+    expect(adminAllowed).toBe(true)
+    expect(salesDenied).toBe(false)
   })
 })

@@ -31,6 +31,7 @@ export type ChangeRequestStatus =
   | 'approved'
   | 'rejected'
   | 'implemented'
+export type ChangeRequestIntakeStatus = 'needs_info' | 'ready_to_start'
 export type ImpactLevel = 'low' | 'medium' | 'high' | 'critical'
 export type ChangeRequestResponsibility =
   | 'our_fault'
@@ -38,6 +39,14 @@ export type ChangeRequestResponsibility =
   | 'third_party'
   | 'unknown'
 export type ChangeRequestReproducibility = 'confirmed' | 'not_confirmed' | 'unknown'
+export type IntakeIntentType =
+  | 'bug_report'
+  | 'fix_request'
+  | 'feature_addition'
+  | 'scope_change'
+  | 'account_task'
+  | 'billing_risk'
+  | 'other'
 
 export interface Customer {
   id: string
@@ -197,6 +206,17 @@ export interface ChangeRequest {
   description: string
   category: ChangeRequestCategory
   status: ChangeRequestStatus
+  intake_status?: ChangeRequestIntakeStatus
+  requirement_completeness?: number
+  missing_fields?: string[]
+  source_channel?: string | null
+  source_message_id?: string | null
+  source_thread_id?: string | null
+  source_actor_name?: string | null
+  source_actor_email?: string | null
+  source_event_at?: string | null
+  intake_group_id?: string | null
+  intake_intent?: IntakeIntentType | string | null
   impact_level: ImpactLevel
   responsibility_type?: ChangeRequestResponsibility
   reproducibility?: ChangeRequestReproducibility
