@@ -149,6 +149,17 @@ interface IntakeWorkspaceProps {
     failed_items: Array<{ change_request_id: string; error: string }>
     created_at: string
   }>
+  demoRuns: Array<{
+    id: string
+    project_id: string
+    project_title: string
+    demo_case_id: string
+    parser: string
+    intake_group_id: string | null
+    created_count: number
+    created_change_request_ids: string[]
+    created_at: string
+  }>
 }
 
 type QueueTab = 'all' | 'needs_info' | 'ready_to_start'
@@ -189,7 +200,7 @@ function taskStatusLabel(status: string | null): string {
   return `タスク: ${status}`
 }
 
-export function IntakeWorkspace({ projects, queue, batchRuns }: IntakeWorkspaceProps) {
+export function IntakeWorkspace({ projects, queue, batchRuns, demoRuns }: IntakeWorkspaceProps) {
   const router = useRouter()
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [message, setMessage] = useState('')
@@ -375,7 +386,10 @@ export function IntakeWorkspace({ projects, queue, batchRuns }: IntakeWorkspaceP
       }
 
       const created = Array.isArray(payload.data?.created) ? payload.data.created.length : 0
-      setSuccess(`${created}件の変更要求をデモケースから起票しました`)
+      const runId = typeof payload.data?.run_id === 'string' ? payload.data.run_id : null
+      setSuccess(
+        `${created}件の変更要求をデモケースから起票しました${runId ? ` (run: ${runId})` : ''}`
+      )
       router.refresh()
     } catch {
       setError('デモケース起票中にエラーが発生しました')
@@ -951,6 +965,43 @@ export function IntakeWorkspace({ projects, queue, batchRuns }: IntakeWorkspaceP
                     {run.failed_count > 0 && (
                       <p className="mt-2 text-xs text-muted-foreground">
                         推奨: {buildFailureActionHints(run.failed_items).join(' / ')}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">デモランナー 実行履歴</CardTitle>
+            <CardDescription>直近20件のデモ run を表示します。</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {demoRuns.length === 0 ? (
+              <p className="text-sm text-muted-foreground">履歴はまだありません。</p>
+            ) : (
+              <div className="space-y-2">
+                {demoRuns.slice(0, 8).map((run) => (
+                  <div
+                    key={run.id}
+                    className="rounded-md border px-3 py-2 text-sm"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-mono text-xs">{run.id}</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">{run.demo_case_id}</Badge>
+                        <Badge variant="secondary">{run.project_title}</Badge>
+                        <Badge variant="outline">parser: {run.parser}</Badge>
+                        <Badge variant="secondary">created: {run.created_count}</Badge>
+                        <span className="text-xs text-muted-foreground">{formatDate(run.created_at)}</span>
+                      </div>
+                    </div>
+                    {run.intake_group_id && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        intake_group: {run.intake_group_id}
                       </p>
                     )}
                   </div>

@@ -289,6 +289,19 @@ export interface ExecutionTaskEvent {
   created_at: string
 }
 
+export interface IntakeDemoRun {
+  id: string
+  project_id: string
+  demo_case_id: string
+  parser: string
+  intake_group_id: string | null
+  created_count: number
+  created_change_request_ids: string[]
+  actor_clerk_user_id: string
+  payload: Record<string, unknown>
+  created_at: string
+}
+
 export interface ChangeRequestBillableRule {
   id: string
   rule_name: string
