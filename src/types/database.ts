@@ -10,6 +10,8 @@ export type ProjectStatus =
   | 'on_hold'
 
 export type ProjectPriority = 'low' | 'medium' | 'high' | 'critical'
+export type InternalRole = 'admin' | 'sales' | 'dev'
+export type AppUserRole = InternalRole | 'customer'
 
 export type ConversationRole = 'assistant' | 'user' | 'system'
 
@@ -305,6 +307,8 @@ export interface ApprovalRequest {
   estimate_id: string | null
   change_request_id: string | null
   request_type: ApprovalRequestType
+  required_role: InternalRole
+  assigned_to_role: InternalRole | null
   status: ApprovalRequestStatus
   severity: ApprovalSeverity
   reason: string
@@ -312,9 +316,21 @@ export interface ApprovalRequest {
   requested_by_clerk_user_id: string
   assigned_to_clerk_user_id: string | null
   resolved_by_clerk_user_id: string | null
+  resolved_by_role: InternalRole | null
   resolution_comment: string | null
   requested_at: string
   resolved_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TeamMember {
+  id: string
+  clerk_user_id: string
+  email: string | null
+  roles: InternalRole[]
+  active: boolean
+  created_by_clerk_user_id: string | null
   created_at: string
   updated_at: string
 }

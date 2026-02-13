@@ -6,6 +6,7 @@ import {
   type ApprovalTrigger,
   type EstimateApprovalStatus,
 } from '@/lib/approval/gate'
+import type { ApprovalRequestType, InternalRole } from '@/types/database'
 
 interface EnsureApprovalRequestsInput {
   supabase: SupabaseClient
@@ -14,6 +15,20 @@ interface EnsureApprovalRequestsInput {
   changeRequestId?: string | null
   actorClerkUserId: string
   triggers: ApprovalTrigger[]
+}
+
+export function resolveRequiredRoleForTrigger(
+  requestType: ApprovalRequestType
+): InternalRole {
+  if (requestType === 'floor_breach' || requestType === 'low_margin') {
+    return 'sales'
+  }
+
+  if (requestType === 'high_risk_change') {
+    return 'dev'
+  }
+
+  return 'admin'
 }
 
 export async function ensureApprovalRequests(input: EnsureApprovalRequestsInput): Promise<{
@@ -44,6 +59,8 @@ export async function ensureApprovalRequests(input: EnsureApprovalRequestsInput)
         estimate_id: input.estimateId,
         change_request_id: input.changeRequestId ?? null,
         request_type: trigger.requestType,
+        required_role: resolveRequiredRoleForTrigger(trigger.requestType),
+        assigned_to_role: resolveRequiredRoleForTrigger(trigger.requestType),
         status: 'pending',
         severity: trigger.severity,
         reason: trigger.reason,
@@ -69,6 +86,7 @@ export async function ensureApprovalRequests(input: EnsureApprovalRequestsInput)
         estimateId: input.estimateId,
         changeRequestId: input.changeRequestId ?? null,
         requestType: trigger.requestType,
+        requiredRole: resolveRequiredRoleForTrigger(trigger.requestType),
         severity: trigger.severity,
       },
     })
