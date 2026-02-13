@@ -54,6 +54,17 @@ interface EstimateBatchRunRow {
   created_at: string
 }
 
+interface IntakeDemoRunRow {
+  id: string
+  project_id: string
+  demo_case_id: string
+  parser: string
+  intake_group_id: string | null
+  created_count: number
+  created_change_request_ids: string[]
+  created_at: string
+}
+
 function normalizeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
@@ -62,7 +73,7 @@ function normalizeStringArray(value: unknown): string[] {
 export default async function IntakePage() {
   const supabase = await createServiceRoleClient()
 
-  const [{ data: projects }, { data: customers }, { data: changeRequests }, { data: batchRuns }] = await Promise.all([
+  const [{ data: projects }, { data: customers }, { data: changeRequests }, { data: batchRuns }, { data: demoRuns }] = await Promise.all([
     supabase
       .from('projects')
       .select('id, title, type, status, customer_id')
@@ -80,6 +91,11 @@ export default async function IntakePage() {
     supabase
       .from('estimate_batch_runs')
       .select('id, requested_count, succeeded_count, failed_count, failed_items, created_at')
+      .order('created_at', { ascending: false })
+      .limit(20),
+    supabase
+      .from('intake_demo_runs')
+      .select('id, project_id, demo_case_id, parser, intake_group_id, created_count, created_change_request_ids, created_at')
       .order('created_at', { ascending: false })
       .limit(20),
   ])
@@ -168,5 +184,28 @@ export default async function IntakePage() {
     created_at: row.created_at,
   }))
 
-  return <IntakeWorkspace projects={projectList} queue={queue} batchRuns={runList} />
+  const demoRunList = ((demoRuns ?? []) as IntakeDemoRunRow[])
+    .filter((row) => projectById.has(row.project_id))
+    .map((row) => ({
+      id: row.id,
+      project_id: row.project_id,
+      project_title: projectById.get(row.project_id)?.title ?? '不明な案件',
+      demo_case_id: row.demo_case_id,
+      parser: row.parser,
+      intake_group_id: row.intake_group_id,
+      created_count: row.created_count,
+      created_change_request_ids: Array.isArray(row.created_change_request_ids)
+        ? row.created_change_request_ids
+        : [],
+      created_at: row.created_at,
+    }))
+
+  return (
+    <IntakeWorkspace
+      projects={projectList}
+      queue={queue}
+      batchRuns={runList}
+      demoRuns={demoRunList}
+    />
+  )
 }

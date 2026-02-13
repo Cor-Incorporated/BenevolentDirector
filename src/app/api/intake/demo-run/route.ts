@@ -194,9 +194,28 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    const createdIds = created.map((item) => item.id)
+    const { data: demoRunLog } = await supabase
+      .from('intake_demo_runs')
+      .insert({
+        project_id: validated.project_id,
+        demo_case_id: demoCase.id,
+        parser: parsed.parser,
+        intake_group_id: intakeGroupId,
+        created_count: created.length,
+        created_change_request_ids: createdIds,
+        actor_clerk_user_id: authUser.clerkUserId,
+        payload: {
+          created_titles: created.map((item) => item.title),
+        },
+      })
+      .select('id, created_at')
+      .maybeSingle()
+
     return NextResponse.json({
       success: true,
       data: {
+        run_id: demoRunLog?.id ?? null,
         demo_case_id: demoCase.id,
         parser: parsed.parser,
         intake_group_id: intakeGroupId,
@@ -215,4 +234,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
-
