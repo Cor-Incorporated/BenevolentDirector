@@ -4,7 +4,11 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 import { sendMessage } from '@/lib/ai/anthropic'
 import { parseJsonFromResponse } from '@/lib/ai/xai'
 import { fetchMarketEvidenceFromXai } from '@/lib/market/evidence'
-import { getAuthenticatedUser, isAdminUser, canAccessProject } from '@/lib/auth/authorization'
+import {
+  canAccessProject,
+  getAuthenticatedUser,
+  getInternalRoles,
+} from '@/lib/auth/authorization'
 import { buildProjectAttachmentContext } from '@/lib/source-analysis/project-context'
 import { writeAuditLog } from '@/lib/audit/log'
 import { changeRequestEstimateSchema } from '@/lib/utils/validation'
@@ -119,11 +123,14 @@ export async function POST(
     }
 
     const supabase = await createServiceRoleClient()
-    const admin = await isAdminUser(supabase, authUser.clerkUserId, authUser.email)
-
-    if (!admin) {
+    const internalRoles = await getInternalRoles(
+      supabase,
+      authUser.clerkUserId,
+      authUser.email
+    )
+    if (internalRoles.size === 0) {
       return NextResponse.json(
-        { success: false, error: '変更見積りは管理者のみ実行できます' },
+        { success: false, error: '変更見積りは管理者・営業・開発ロールのみ実行できます' },
         { status: 403 }
       )
     }

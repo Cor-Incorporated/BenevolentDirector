@@ -4,7 +4,11 @@ import { sendMessage } from '@/lib/ai/anthropic'
 import { parseJsonFromResponse } from '@/lib/ai/xai'
 import { fetchMarketEvidenceFromXai } from '@/lib/market/evidence'
 import { estimateParamsSchema } from '@/lib/utils/validation'
-import { getAuthenticatedUser, isAdminUser, canAccessProject } from '@/lib/auth/authorization'
+import {
+  canAccessProject,
+  getAuthenticatedUser,
+  getInternalRoles,
+} from '@/lib/auth/authorization'
 import { buildProjectAttachmentContext } from '@/lib/source-analysis/project-context'
 import { fetchActivePricingPolicy } from '@/lib/pricing/policies'
 import { calculatePrice, type MarketAssumption } from '@/lib/pricing/engine'
@@ -167,10 +171,14 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createServiceRoleClient()
 
-    const admin = await isAdminUser(supabase, authUser.clerkUserId, authUser.email)
-    if (!admin) {
+    const internalRoles = await getInternalRoles(
+      supabase,
+      authUser.clerkUserId,
+      authUser.email
+    )
+    if (!internalRoles.has('admin') && !internalRoles.has('sales')) {
       return NextResponse.json(
-        { success: false, error: '見積り生成は管理者のみ実行できます' },
+        { success: false, error: '見積り生成は管理者または営業ロールのみ実行できます' },
         { status: 403 }
       )
     }

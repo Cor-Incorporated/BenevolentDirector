@@ -33,6 +33,7 @@ export const changeRequestReproducibilitySchema = z.enum([
   'not_confirmed',
   'unknown',
 ])
+export const internalRoleSchema = z.enum(['admin', 'sales', 'dev'])
 
 export const projectPrioritySchema = z.enum(['low', 'medium', 'high', 'critical'])
 
@@ -128,12 +129,15 @@ export const approvalRequestCreateSchema = z.object({
   severity: z.enum(['low', 'medium', 'high', 'critical']).default('medium'),
   reason: z.string().min(3).max(3000),
   context: z.record(z.string(), z.unknown()).default({}),
+  required_role: internalRoleSchema.default('admin'),
+  assigned_to_role: internalRoleSchema.optional(),
   assigned_to_clerk_user_id: z.string().min(1).max(120).optional(),
 })
 
 export const approvalRequestUpdateSchema = z.object({
   status: z.enum(['pending', 'approved', 'rejected', 'cancelled']),
   resolution_comment: z.string().max(3000).optional(),
+  assigned_to_role: internalRoleSchema.optional(),
   assigned_to_clerk_user_id: z.string().min(1).max(120).optional(),
 })
 
@@ -149,6 +153,13 @@ export const changeRequestBillableRuleSchema = z.object({
   result_is_billable: z.boolean(),
   reason_template: z.string().min(3).max(1000),
   metadata: z.record(z.string(), z.unknown()).default({}),
+})
+
+export const teamMemberSchema = z.object({
+  clerk_user_id: z.string().min(1).max(120),
+  email: z.string().email().optional().nullable(),
+  roles: z.array(internalRoleSchema).min(1),
+  active: z.boolean().default(true),
 })
 
 export const repositoryAnalysisRequestSchema = z.object({
@@ -173,5 +184,6 @@ export type DataSourceInput = z.infer<typeof dataSourceSchema>
 export type ApprovalRequestCreateInput = z.infer<typeof approvalRequestCreateSchema>
 export type ApprovalRequestUpdateInput = z.infer<typeof approvalRequestUpdateSchema>
 export type ChangeRequestBillableRuleInput = z.infer<typeof changeRequestBillableRuleSchema>
+export type TeamMemberInput = z.infer<typeof teamMemberSchema>
 export type RepositoryAnalysisRequestInput = z.infer<typeof repositoryAnalysisRequestSchema>
 export type SourceAnalysisRunRequestInput = z.infer<typeof sourceAnalysisRunRequestSchema>

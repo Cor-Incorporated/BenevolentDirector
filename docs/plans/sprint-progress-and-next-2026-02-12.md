@@ -9,10 +9,10 @@
 | EPIC-REQ | 5 | 0 | 2 | 3 | 20% |
 | EPIC-DATA | 10 | 3 | 3 | 4 | 45% |
 | EPIC-PRICE | 4 | 4 | 0 | 0 | 100% |
-| EPIC-CHG | 6 | 4 | 1 | 1 | 75% |
+| EPIC-CHG | 6 | 5 | 0 | 1 | 83% |
 | EPIC-GOV | 2 | 0 | 2 | 0 | 50% |
 | EPIC-OUT | 4 | 0 | 0 | 4 | 0% |
-| **Total** | **31** | **11** | **8** | **12** | **48%** |
+| **Total** | **31** | **12** | **7** | **12** | **50%** |
 
 ## 2. Story別更新ステータス
 
@@ -42,7 +42,7 @@
 | CHG-103 | **Done** | 追加工数4区分算定実装 |
 | CHG-104 | **Done** | 追加料金算定実装 |
 | CHG-105 | Partial | 変更見積り生成あり。顧客提出差分文書の完成度不足 |
-| CHG-106 | Not Started | 役割別承認ゲート未実装 |
+| CHG-106 | **Done** | 承認リクエストに `required_role` を追加し、該当ロール（またはadmin）以外の承認操作を禁止 |
 | GOV-101 | Partial | Admin/案件所有者検証あり。sales/dev/customerの多ロール未実装 |
 | GOV-102 | Partial | 監査ログ基盤あり。全操作網羅/改ざん耐性の詰め未完 |
 | OUT-101 | Not Started | 顧客向けPDF出力未実装 |
@@ -83,6 +83,18 @@
   - `change_requests` に判定入力（`responsibility_type`,`reproducibility`）と評価結果（`billable_rule_id`,`billable_evaluation`）を保存
   - 管理API `/api/admin/change-request-billable-rules` を追加
   - 管理UIで責任区分/再現性入力を追加
+
+### 3.4 Day4実装結果（今回）
+- CHG-106-T1 を実装
+  - 承認リクエストへ `required_role` を導入（`admin/sales/dev`）
+  - `approval_request` 更新APIで required role 検証を強制
+  - 承認自動起票時に request_type から required role を自動割当
+- GOV-101-T1 を実装（部分完了）
+  - 認可基盤を `admin/sales/dev/customer` へ拡張（allowlist + `team_members`）
+  - `/admin` レイアウトを internal role のみに制限
+  - `/admin/approvals` 承認キュー画面を追加
+  - 見積生成APIを role-based 制御へ変更（新規見積: admin/sales、変更見積: admin/sales/dev）
+  - `team_members` 管理APIを追加（`/api/admin/team-members`）
 
 ## 4. 既存チケットへの紐付け更新
 
@@ -134,7 +146,7 @@
 - Day1: DATA-109-T1/T2（usage ledger + hard quota）✅
 - Day2: DATA-110-T1/T2（evidence appendix + 2ソースガード）✅
 - Day3: PRICE-104-T1/T2 + CHG-102-T1 ✅
-- Day4: CHG-106-T1 + GOV-101-T1
+- Day4: CHG-106-T1 + GOV-101-T1 ✅（GOV-101は残りAPI境界テストをDay5へ）
 - Day5: GOV-102-T1 + OPS-ANL-01 の最小運用化
 
 ## 6. 既知リスク
