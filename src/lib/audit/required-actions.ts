@@ -31,6 +31,11 @@ export const REQUIRED_AUDIT_ACTIONS: RequiredAuditAction[] = [
     category: 'intake',
   },
   {
+    action: 'intake.demo_run',
+    file: 'src/app/api/intake/demo-run/route.ts',
+    category: 'intake',
+  },
+  {
     action: 'change_request.ready_packet_view',
     file: 'src/app/api/change-requests/[id]/ready-packet/route.ts',
     category: 'intake',

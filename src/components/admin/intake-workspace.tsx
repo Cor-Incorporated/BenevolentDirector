@@ -200,6 +200,7 @@ export function IntakeWorkspace({ projects, queue, batchRuns }: IntakeWorkspaceP
   const [demoCaseId, setDemoCaseId] = useState(INTAKE_DEMO_CASES[0]?.id ?? '')
   const [parseLoading, setParseLoading] = useState(false)
   const [ingestLoading, setIngestLoading] = useState(false)
+  const [demoRunLoading, setDemoRunLoading] = useState(false)
   const [estimateLoadingId, setEstimateLoadingId] = useState<string | null>(null)
   const [bulkEstimateLoading, setBulkEstimateLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -348,6 +349,39 @@ export function IntakeWorkspace({ projects, queue, batchRuns }: IntakeWorkspaceP
     setParserMode('heuristic')
     setSuccess(`デモケースを読み込みました: ${demoCase.title}`)
     setError(null)
+  }
+
+  const runDemoCase = async () => {
+    if (!projectId || !demoCaseId) return
+    setDemoRunLoading(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const response = await fetch('/api/intake/demo-run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: projectId,
+          demo_case_id: demoCaseId,
+          requested_by_name: actorName || undefined,
+          requested_by_email: actorEmail || undefined,
+        }),
+      })
+      const payload = await response.json()
+      if (!response.ok || !payload.success) {
+        setError(payload.error ?? 'デモケース起票に失敗しました')
+        return
+      }
+
+      const created = Array.isArray(payload.data?.created) ? payload.data.created.length : 0
+      setSuccess(`${created}件の変更要求をデモケースから起票しました`)
+      router.refresh()
+    } catch {
+      setError('デモケース起票中にエラーが発生しました')
+    } finally {
+      setDemoRunLoading(false)
+    }
   }
 
   const requestEstimate = async (changeRequestId: string): Promise<{ ok: boolean; error?: string }> => {
@@ -702,6 +736,19 @@ export function IntakeWorkspace({ projects, queue, batchRuns }: IntakeWorkspaceP
                   デモケースを投入
                 </Button>
               </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={runDemoCase}
+                disabled={demoRunLoading || !projectId || !demoCaseId}
+              >
+                {demoRunLoading ? 'デモ起票中...' : 'デモケースを即起票'}
+              </Button>
+              <p className="text-xs text-muted-foreground self-center">
+                parse→ingest を heuristic 固定で実行し、キューに投入します。
+              </p>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
