@@ -112,6 +112,7 @@ export const intakeSourceSchema = z.object({
 export const intakeParseRequestSchema = z.object({
   project_id: z.string().uuid(),
   message: z.string().min(3).max(20000),
+  parser_mode: z.enum(['auto', 'heuristic']).optional(),
   source: intakeSourceSchema.optional(),
 })
 
