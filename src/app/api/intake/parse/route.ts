@@ -37,7 +37,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const parsed = await parseIntakeMessage(validated.message)
+    const parsed = await parseIntakeMessage(validated.message, {
+      mode: validated.parser_mode,
+    })
     const intents = parsed.intents.map((intent) => {
       const completeness = calculateCompleteness({
         intentType: intent.intentType,
@@ -66,6 +68,7 @@ export async function POST(request: NextRequest) {
       payload: {
         parser: parsed.parser,
         intentCount: intents.length,
+        parserMode: validated.parser_mode ?? 'auto',
         sourceChannel: validated.source?.channel ?? 'web_app',
       },
     })

@@ -87,7 +87,9 @@ export async function POST(request: NextRequest) {
         .eq('id', validated.project_id)
         .maybeSingle(),
       loadActiveBillableRules(supabase),
-      parseIntakeMessage(validated.message),
+      parseIntakeMessage(validated.message, {
+        mode: validated.parser_mode,
+      }),
     ])
 
     const projectCreatedAt = project?.created_at ?? new Date().toISOString()
@@ -186,6 +188,7 @@ export async function POST(request: NextRequest) {
       projectId: validated.project_id,
       payload: {
         parser: parsed.parser,
+        parserMode: validated.parser_mode ?? 'auto',
         intentCount: rows.length,
         createdCount: created.length,
         intakeGroupId,

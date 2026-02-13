@@ -34,6 +34,8 @@ export interface IntakeParseResult {
   parser: 'anthropic' | 'heuristic'
 }
 
+export type IntakeParserMode = 'auto' | 'heuristic'
+
 const INTENT_TYPE_MAP: Record<string, IntakeIntentType> = {
   bug_report: 'bug_report',
   fix_request: 'fix_request',
@@ -286,7 +288,23 @@ ${message}
   }
 }
 
-export async function parseIntakeMessage(message: string): Promise<IntakeParseResult> {
+function resolveParserMode(mode?: IntakeParserMode): IntakeParserMode {
+  if (mode) return mode
+
+  const envMode = process.env.PO_INTAKE_PARSER_MODE?.trim().toLowerCase()
+  if (envMode === 'heuristic') return 'heuristic'
+  return 'auto'
+}
+
+export async function parseIntakeMessage(
+  message: string,
+  options?: { mode?: IntakeParserMode }
+): Promise<IntakeParseResult> {
+  const mode = resolveParserMode(options?.mode)
+  if (mode === 'heuristic') {
+    return parseHeuristically(message)
+  }
+
   try {
     return await parseWithAnthropic(message)
   } catch {

@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { INTAKE_DEMO_CASES, getIntakeDemoCaseById } from '@/lib/intake/demo-cases'
 import { buildFailureActionHints, toFailureSummaryText } from '@/lib/intake/batch-run-failures'
 import { sortIntakeQueue } from '@/lib/intake/queue-order'
 import { cn } from '@/lib/utils'
@@ -195,6 +196,8 @@ export function IntakeWorkspace({ projects, queue, batchRuns }: IntakeWorkspaceP
   const [actorName, setActorName] = useState('')
   const [actorEmail, setActorEmail] = useState('')
   const [sourceChannel, setSourceChannel] = useState('admin_dashboard')
+  const [parserMode, setParserMode] = useState<'auto' | 'heuristic'>('auto')
+  const [demoCaseId, setDemoCaseId] = useState(INTAKE_DEMO_CASES[0]?.id ?? '')
   const [parseLoading, setParseLoading] = useState(false)
   const [ingestLoading, setIngestLoading] = useState(false)
   const [estimateLoadingId, setEstimateLoadingId] = useState<string | null>(null)
@@ -271,6 +274,7 @@ export function IntakeWorkspace({ projects, queue, batchRuns }: IntakeWorkspaceP
         body: JSON.stringify({
           project_id: projectId,
           message,
+          parser_mode: parserMode,
           source: {
             channel: sourceChannel,
             actor_name: actorName || undefined,
@@ -306,6 +310,7 @@ export function IntakeWorkspace({ projects, queue, batchRuns }: IntakeWorkspaceP
         body: JSON.stringify({
           project_id: projectId,
           message,
+          parser_mode: parserMode,
           source: {
             channel: sourceChannel,
             actor_name: actorName || undefined,
@@ -331,6 +336,18 @@ export function IntakeWorkspace({ projects, queue, batchRuns }: IntakeWorkspaceP
     } finally {
       setIngestLoading(false)
     }
+  }
+
+  const loadDemoCase = () => {
+    const demoCase = getIntakeDemoCaseById(demoCaseId)
+    if (!demoCase) return
+    setMessage(demoCase.message)
+    setSourceChannel('demo_fixture')
+    setActorName('PO Demo User')
+    setActorEmail('demo-po@example.com')
+    setParserMode('heuristic')
+    setSuccess(`デモケースを読み込みました: ${demoCase.title}`)
+    setError(null)
   }
 
   const requestEstimate = async (changeRequestId: string): Promise<{ ok: boolean; error?: string }> => {
@@ -649,6 +666,41 @@ export function IntakeWorkspace({ projects, queue, batchRuns }: IntakeWorkspaceP
                   onChange={(event) => setSourceChannel(event.target.value)}
                   placeholder="admin_dashboard"
                 />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-[1fr,180px,auto]">
+              <div className="space-y-2">
+                <Label>デモケース</Label>
+                <Select value={demoCaseId} onValueChange={setDemoCaseId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="デモケースを選択" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INTAKE_DEMO_CASES.map((demoCase) => (
+                      <SelectItem key={demoCase.id} value={demoCase.id}>
+                        {demoCase.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Parser Mode</Label>
+                <Select value={parserMode} onValueChange={(value) => setParserMode(value as 'auto' | 'heuristic')}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">auto</SelectItem>
+                    <SelectItem value="heuristic">heuristic</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <Button type="button" variant="secondary" onClick={loadDemoCase}>
+                  デモケースを投入
+                </Button>
               </div>
             </div>
 
