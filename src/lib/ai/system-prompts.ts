@@ -229,7 +229,17 @@ Markdown 記法は使用可能ですが、JSON 形式にしないでください
 - \`is_complete\` — true になったら全カテゴリの確認完了
 - \`question_type\` — "open" | "choice" | "confirmation"
 - \`choices\` — question_type が "choice" の場合の選択肢
-- 各カテゴリの \`confidence_score\` が 0.8 以上になったら確認済みとしてください。`
+- 各カテゴリの \`confidence_score\` が 0.8 以上になったら確認済みとしてください。
+
+## is_complete の判定ルール（厳守）
+
+**is_complete を true にできる条件:**
+1. 上記の全カテゴリが confirmed_categories に含まれていること
+2. お客様に質問を投げかけている回答では、絶対に is_complete を true にしないこと
+3. is_complete を true にするのは、お客様の最後の回答を受け取り、すべての情報が揃ったことを確認した回答のみ
+
+**禁止パターン:** 質問（連絡先情報や確認事項など）を含むメッセージで is_complete: true を設定すること。
+お客様からの回答を待ってから is_complete: true を設定してください。`
 }
 
 export function getSpecGenerationPrompt(projectType: ProjectType): string {
