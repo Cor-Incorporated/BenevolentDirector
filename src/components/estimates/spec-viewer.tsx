@@ -1,6 +1,7 @@
 'use client'
 
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   Card,
   CardContent,
@@ -36,7 +37,7 @@ export function SpecViewer({ specMarkdown }: SpecViewerProps) {
       </CardHeader>
       <CardContent>
         <div className="prose prose-sm max-w-none dark:prose-invert">
-          <ReactMarkdown>{specMarkdown}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{specMarkdown}</ReactMarkdown>
         </div>
       </CardContent>
     </Card>
