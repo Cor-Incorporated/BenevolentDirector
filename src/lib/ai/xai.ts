@@ -392,21 +392,60 @@ export async function requestXaiResponse(
 }
 
 export function parseJsonFromResponse<T>(text: string): T {
-  // 1. Try ```json ... ``` block extraction
+  // 1. Try ```json ... ``` block extraction (non-greedy)
   const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
   if (jsonMatch) {
-    return JSON.parse(jsonMatch[1]) as T
+    try {
+      return JSON.parse(jsonMatch[1]) as T
+    } catch {
+      // Non-greedy match may have caught inner ```, try next strategy
+    }
   }
 
-  // 2. Try parsing entire text as JSON
+  // 2. Strip code fences from start/end and try parsing
+  const stripped = text
+    .replace(/^\s*```(?:json)?\s*\n?/, '')
+    .replace(/\n?\s*```\s*$/, '')
+    .trim()
+  try {
+    return JSON.parse(stripped) as T
+  } catch {
+    // continue
+  }
+
+  // 3. Try parsing entire text as JSON
   try {
     return JSON.parse(text) as T
   } catch {
-    // 3. Try extracting the first JSON object from mixed text
-    const objectMatch = text.match(/\{[\s\S]*\}/)
-    if (objectMatch) {
-      return JSON.parse(objectMatch[0]) as T
-    }
-    throw new SyntaxError(`No valid JSON found in response: ${text.slice(0, 200)}`)
+    // continue
   }
+
+  // 4. Extract JSON object using balanced brace matching
+  const startIdx = text.indexOf('{')
+  if (startIdx !== -1) {
+    let depth = 0
+    let inString = false
+    let escaped = false
+    for (let i = startIdx; i < text.length; i++) {
+      const ch = text[i]
+      if (escaped) { escaped = false; continue }
+      if (ch === '\\' && inString) { escaped = true; continue }
+      if (ch === '"') { inString = !inString; continue }
+      if (!inString) {
+        if (ch === '{') depth++
+        if (ch === '}') {
+          depth--
+          if (depth === 0) {
+            try {
+              return JSON.parse(text.slice(startIdx, i + 1)) as T
+            } catch {
+              break
+            }
+          }
+        }
+      }
+    }
+  }
+
+  throw new SyntaxError(`No valid JSON found in response: ${text.slice(0, 200)}`)
 }
