@@ -4,13 +4,18 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser, isAdminUser } from '@/lib/auth/authorization'
 import { writeAuditLog } from '@/lib/audit/log'
 import { teamMemberSchema } from '@/lib/utils/validation'
+import { applyRateLimit } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const authUser = await getAuthenticatedUser()
     if (!authUser) {
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
+
+    const rateLimitedGet = applyRateLimit(request, 'admin:team-members:get', RATE_LIMITS['admin:team-members:get'], authUser.clerkUserId)
+    if (rateLimitedGet) return rateLimitedGet
 
     const supabase = await createServiceRoleClient()
     const isAdmin = await isAdminUser(supabase, authUser.clerkUserId, authUser.email)
@@ -39,6 +44,9 @@ export async function POST(request: NextRequest) {
     if (!authUser) {
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
+
+    const rateLimited = applyRateLimit(request, 'admin:team-members:post', RATE_LIMITS['admin:team-members:post'], authUser.clerkUserId)
+    if (rateLimited) return rateLimited
 
     const supabase = await createServiceRoleClient()
     const isAdmin = await isAdminUser(supabase, authUser.clerkUserId, authUser.email)

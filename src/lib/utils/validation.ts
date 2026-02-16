@@ -208,9 +208,22 @@ export const teamMemberSchema = z.object({
   active: z.boolean().default(true),
 })
 
+export const businessLineSchema = z.enum(['boltsite', 'iotrealm', 'tapforge'])
+
+export const githubReferenceUpdateSchema = z.object({
+  is_showcase: z.boolean().optional(),
+  hours_spent: z.number().nonnegative().optional(),
+  project_type: z.string().max(100).optional(),
+})
+
+export const githubSyncRequestSchema = z.object({
+  orgs: z.array(z.string().min(1).max(100)).min(1).max(20),
+})
+
 export const adminProfileSchema = z.object({
   display_name: z.string().trim().min(1).max(120),
   default_hourly_rate: z.number().int().min(1000).max(1000000),
+  github_orgs: z.array(z.string().min(1).max(100)).max(20).optional(),
 })
 
 export const repositoryAnalysisRequestSchema = z.object({
@@ -253,6 +266,9 @@ export type ApprovalRequestUpdateInput = z.infer<typeof approvalRequestUpdateSch
 export type ChangeRequestBillableRuleInput = z.infer<typeof changeRequestBillableRuleSchema>
 export type TeamMemberInput = z.infer<typeof teamMemberSchema>
 export type AdminProfileInput = z.infer<typeof adminProfileSchema>
+export type BusinessLineInput = z.infer<typeof businessLineSchema>
+export type GitHubReferenceUpdateInput = z.infer<typeof githubReferenceUpdateSchema>
+export type GitHubSyncRequestInput = z.infer<typeof githubSyncRequestSchema>
 export type RepositoryAnalysisRequestInput = z.infer<typeof repositoryAnalysisRequestSchema>
 export type SourceAnalysisRunRequestInput = z.infer<typeof sourceAnalysisRunRequestSchema>
 export type ExecutionTaskUpdateInput = z.infer<typeof executionTaskUpdateSchema>

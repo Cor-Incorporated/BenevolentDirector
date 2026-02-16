@@ -56,6 +56,12 @@ export default async function ProjectDetailPage({
     .eq('project_id', id)
     .order('created_at', { ascending: false })
 
+  const { data: linearIssueMappings } = await supabase
+    .from('linear_issue_mappings')
+    .select('*')
+    .eq('project_id', id)
+    .order('created_at', { ascending: true })
+
   const statusColor: Record<string, string> = {
     draft: 'bg-gray-500/10 text-gray-700',
     interviewing: 'bg-blue-500/10 text-blue-700',
@@ -140,6 +146,7 @@ export default async function ProjectDetailPage({
             projectId={project.id}
             hasSpec={!!project.spec_markdown}
             estimates={estimates ?? []}
+            linearIssueMappings={linearIssueMappings ?? []}
           />
         </TabsContent>
 

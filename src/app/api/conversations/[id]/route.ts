@@ -1,5 +1,7 @@
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser, canAccessProject } from '@/lib/auth/authorization'
+import { applyRateLimitRaw } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 import { z } from 'zod'
 
 const deleteBodySchema = z.object({
@@ -19,6 +21,9 @@ export async function DELETE(
         { status: 401, headers: { 'Content-Type': 'application/json' } }
       )
     }
+
+    const rateLimited = applyRateLimitRaw(request, 'conversations:delete', RATE_LIMITS['conversations:delete'], authUser.clerkUserId)
+    if (rateLimited) return rateLimited
 
     const { id: messageId } = await params
 

@@ -6,6 +6,8 @@ import {
   getInternalRoles,
 } from '@/lib/auth/authorization'
 import { writeAuditLog } from '@/lib/audit/log'
+import { applyRateLimit } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 
 interface EstimateRow {
   id: string
@@ -37,6 +39,9 @@ export async function POST(
     if (!authUser) {
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
+
+    const rateLimited = applyRateLimit(_request, 'change-requests:taskize:post', RATE_LIMITS['change-requests:taskize:post'], authUser.clerkUserId)
+    if (rateLimited) return rateLimited
 
     const supabase = await createServiceRoleClient()
     const internalRoles = await getInternalRoles(

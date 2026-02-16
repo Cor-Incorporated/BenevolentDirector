@@ -7,6 +7,8 @@ import {
   getInternalRoles,
 } from '@/lib/auth/authorization'
 import { writeAuditLog } from '@/lib/audit/log'
+import { applyRateLimit } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 
 const requestSchema = z.object({
   scope: z.enum(['intake_queue', 'manual_selection']).default('intake_queue'),
@@ -31,6 +33,9 @@ export async function POST(request: Request) {
     if (!authUser) {
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
+
+    const rateLimited = applyRateLimit(request, 'change-requests:estimate-batch-runs:post', RATE_LIMITS['change-requests:estimate-batch-runs:post'], authUser.clerkUserId)
+    if (rateLimited) return rateLimited
 
     const rawBody = await request.json()
     const validated = requestSchema.parse(rawBody)

@@ -1,5 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { sendMessage } from '@/lib/ai/anthropic'
+import {
+  sendMessage,
+  sendVisionMessage,
+  buildImageBlock,
+  validateImageSize,
+} from '@/lib/ai/anthropic'
+import { parseJsonFromResponse } from '@/lib/ai/xai'
 import { analyzeZipArchiveWithClaude } from '@/lib/source-analysis/zip'
 import { analyzeRepositoryUrlWithClaude, isGitHubUrl } from '@/lib/source-analysis/repository'
 import { analyzeWebsiteUrlWithGrok } from '@/lib/source-analysis/website'
@@ -135,7 +141,29 @@ async function downloadProjectFileBuffer(
   return Buffer.from(arrayBuffer)
 }
 
-async function analyzeImagePlaceholder(
+const SYSTEM_PROMPT_IMAGE = `あなたは受託開発の要件定義支援者です。添付画像を詳細に分析し、以下の観点で情報を抽出してください：
+
+- 画像の種類（UIモックアップ、スクリーンショット、ワイヤーフレーム、ER図、フローチャート、仕様書の一部など）
+- UI要素の特定（ボタン、フォーム、テーブル、ナビゲーション、カード等）
+- レイアウト構造（グリッド、フレックス、固定幅等）
+- デザインの特徴（配色、フォント感、余白の使い方）
+- 機能の推定（何をする画面か、どんな操作が可能か）
+- 開発工数に影響するポイント（複雑なインタラクション、アニメーション等）
+
+回答は必ず以下のJSON形式で返してください：
+\`\`\`json
+{
+  "image_type": "画像の種類",
+  "ui_elements": ["UI要素1", "UI要素2"],
+  "layout_structure": "レイアウト構造の説明",
+  "design_features": "デザインの特徴",
+  "functional_estimate": "機能の推定",
+  "dev_complexity_notes": ["開発複雑度ポイント1", "ポイント2"],
+  "summary": "2-3文の要約"
+}
+\`\`\``
+
+async function fallbackImageAnalysis(
   file: ProjectFileRow,
   usageContext: UsageCallContext
 ): Promise<Record<string, unknown>> {
@@ -157,7 +185,49 @@ async function analyzeImagePlaceholder(
   return {
     type: 'image',
     summary,
-    note: 'この環境では画像ピクセル自体の自動解析は未対応です。メタ情報ベースで要件確認ポイントを生成しました。',
+    note: 'メタ情報ベースで要件確認ポイントを生成しました。Vision APIでの解析は行われていません。',
+  }
+}
+
+async function analyzeImageWithClaude(
+  supabase: SupabaseClient,
+  file: ProjectFileRow,
+  usageContext: UsageCallContext
+): Promise<Record<string, unknown>> {
+  const supportedImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+  if (!file.file_type || !supportedImageTypes.includes(file.file_type)) {
+    return fallbackImageAnalysis(file, usageContext)
+  }
+
+  const buffer = await downloadProjectFileBuffer(supabase, file.file_path)
+
+  try {
+    validateImageSize(buffer)
+  } catch {
+    return fallbackImageAnalysis(file, usageContext)
+  }
+
+  const base64Data = buffer.toString('base64')
+  const mediaType = file.file_type as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+  const imageBlock = buildImageBlock(base64Data, mediaType)
+
+  const response = await sendVisionMessage(
+    SYSTEM_PROMPT_IMAGE,
+    [{
+      role: 'user',
+      content: [
+        imageBlock,
+        { type: 'text', text: `添付画像を分析してください。ファイル名: ${file.file_name}` },
+      ],
+    }],
+    { maxTokens: 1500, temperature: 0.2, usageContext }
+  )
+
+  try {
+    const parsed = parseJsonFromResponse<Record<string, unknown>>(response)
+    return { type: 'image', ...parsed }
+  } catch {
+    return { type: 'image', summary: response.slice(0, 500) }
   }
 }
 
@@ -195,6 +265,7 @@ async function analyzeFileUpload(
     const pdfText = extractTextFromPdfBuffer(buffer)
     const pdf = await analyzePdfWithClaude({
       fileName: file.file_name,
+      pdfBuffer: buffer,
       pdfText,
       usageContext,
     })
@@ -210,7 +281,7 @@ async function analyzeFileUpload(
   }
 
   if (mimeType.startsWith('image/')) {
-    return analyzeImagePlaceholder(file, usageContext)
+    return analyzeImageWithClaude(supabase, file, usageContext)
   }
 
   return {

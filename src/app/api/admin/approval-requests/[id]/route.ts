@@ -9,6 +9,8 @@ import {
 import { writeAuditLog } from '@/lib/audit/log'
 import { refreshEstimateApprovalState } from '@/lib/approval/requests'
 import { approvalRequestUpdateSchema } from '@/lib/utils/validation'
+import { applyRateLimit } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 
 export async function PATCH(
   request: NextRequest,
@@ -19,6 +21,9 @@ export async function PATCH(
     if (!authUser) {
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
+
+    const rateLimited = applyRateLimit(request, 'admin:approval-requests:patch', RATE_LIMITS['admin:approval-requests:patch'], authUser.clerkUserId)
+    if (rateLimited) return rateLimited
 
     const supabase = await createServiceRoleClient()
     const internalRoles = await getInternalRoles(

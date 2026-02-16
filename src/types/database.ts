@@ -15,6 +15,8 @@ export type ProjectPriority = 'low' | 'medium' | 'high' | 'critical'
 export type InternalRole = 'admin' | 'sales' | 'dev'
 export type AppUserRole = InternalRole | 'customer'
 
+export type BusinessLine = 'boltsite' | 'iotrealm' | 'tapforge'
+
 export type ConversationRole = 'assistant' | 'user' | 'system'
 
 export type EstimateMode = 'market_comparison' | 'hours_only' | 'hybrid'
@@ -70,6 +72,7 @@ export interface Project {
   priority: ProjectPriority | null
   existing_system_url: string | null
   spec_markdown: string | null
+  business_line: BusinessLine | null
   created_at: string
   updated_at: string
 }
@@ -117,14 +120,34 @@ export interface GitHubReference {
   id: string
   org_name: string
   repo_name: string
-  pr_title: string | null
-  pr_number: number | null
+  full_name: string
   description: string | null
   language: string | null
+  stars: number
+  topics: string[]
+  is_showcase: boolean
   hours_spent: number | null
-  embedding: number[] | null
+  pr_title: string | null
+  pr_number: number | null
+  analysis_summary: string | null
+  analysis_result: Record<string, unknown> | null
+  tech_stack: string[]
+  project_type: string | null
   metadata: Record<string, unknown>
+  synced_at: string | null
+  created_by_clerk_user_id: string | null
+  first_commit_date: string | null
+  last_commit_date: string | null
+  total_commits: number | null
+  commits_per_week: number | null
+  contributor_count: number | null
+  core_contributors: number | null
+  total_additions: number | null
+  total_deletions: number | null
+  velocity_data: Record<string, unknown> | null
+  velocity_analyzed_at: string | null
   created_at: string
+  updated_at: string
 }
 
 export interface Estimate {
@@ -158,6 +181,10 @@ export interface Estimate {
   pricing_snapshot?: Record<string, unknown> | null
   risk_flags?: string[] | null
   market_evidence_id?: string | null
+  go_no_go_result: Record<string, unknown> | null
+  value_proposition: Record<string, unknown> | null
+  linear_project_id?: string | null
+  linear_sync_status?: LinearSyncStatus
   created_at: string
 }
 
@@ -438,4 +465,25 @@ export interface ProjectWithDetails extends Project {
   conversations: Conversation[]
   files: ProjectFile[]
   estimates: Estimate[]
+}
+
+// --- Linear Integration Types ---
+export type LinearSyncStatus = 'not_synced' | 'syncing' | 'synced' | 'error'
+
+export interface LinearIssueMapping {
+  id: string
+  estimate_id: string
+  project_id: string
+  module_name: string
+  phase_name: string | null
+  linear_issue_id: string
+  linear_issue_identifier: string | null
+  linear_issue_url: string
+  linear_team_id: string | null
+  linear_cycle_id: string | null
+  sync_status: string
+  hours_estimate: number | null
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
 }

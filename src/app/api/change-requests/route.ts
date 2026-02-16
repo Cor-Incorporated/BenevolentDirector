@@ -4,6 +4,8 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser, canAccessProject } from '@/lib/auth/authorization'
 import { writeAuditLog } from '@/lib/audit/log'
 import { changeRequestSchema } from '@/lib/utils/validation'
+import { applyRateLimit } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 import {
   evaluateBillableDecision,
   loadActiveBillableRules,
@@ -15,6 +17,9 @@ export async function GET(request: NextRequest) {
     if (!authUser) {
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
+
+    const rateLimitedGet = applyRateLimit(request, 'change-requests:get', RATE_LIMITS['change-requests:get'], authUser.clerkUserId)
+    if (rateLimitedGet) return rateLimitedGet
 
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('project_id')
@@ -69,6 +74,9 @@ export async function POST(request: NextRequest) {
     if (!authUser) {
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
+
+    const rateLimited = applyRateLimit(request, 'change-requests:post', RATE_LIMITS['change-requests:post'], authUser.clerkUserId)
+    if (rateLimited) return rateLimited
 
     const body = await request.json()
     const validated = changeRequestSchema.parse(body)

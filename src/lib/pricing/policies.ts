@@ -41,6 +41,7 @@ export async function fetchActivePricingPolicy(
     avgInternalCostPerMemberMonth: Number(
       data.avg_internal_cost_per_member_month ?? fallback.avgInternalCostPerMemberMonth
     ),
+    internalTeamSize: Number(data.internal_team_size ?? fallback.internalTeamSize),
     defaultTeamSize: Number(data.default_team_size ?? fallback.defaultTeamSize),
     defaultDurationMonths: Number(
       data.default_duration_months ?? fallback.defaultDurationMonths

@@ -4,6 +4,8 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser, canAccessProject } from '@/lib/auth/authorization'
 import { writeAuditLog } from '@/lib/audit/log'
 import { intakeIngestRequestSchema } from '@/lib/utils/validation'
+import { applyRateLimit } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 import {
   calculateCompleteness,
   toIntakeStatus,
@@ -59,6 +61,9 @@ export async function POST(request: NextRequest) {
     if (!authUser) {
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
+
+    const rateLimited = applyRateLimit(request, 'intake:ingest:post', RATE_LIMITS['intake:ingest:post'], authUser.clerkUserId)
+    if (rateLimited) return rateLimited
 
     const body = await request.json()
     const validated = intakeIngestRequestSchema.parse(body)
