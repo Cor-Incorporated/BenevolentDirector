@@ -12,9 +12,18 @@ import {
   resolveEstimateStatus,
 } from '@/lib/approval/gate'
 import { writeAuditLog } from '@/lib/audit/log'
-import type { EstimateMode, ProjectType } from '@/types/database'
+import { findSimilarProjects } from '@/lib/estimates/similar-projects'
+import { evaluateGoNoGo, type GoNoGoResult } from '@/lib/approval/go-no-go'
+import { generateImplementationPlan, type ImplementationPlan } from '@/lib/estimates/module-decomposition'
+import { analyzeCodeImpact, type CodeImpactAnalysis } from '@/lib/estimates/code-impact-analysis'
+import { calculateSpeedAdvantage } from '@/lib/estimates/speed-advantage'
+import type { EstimateMode, ProjectType, BusinessLine } from '@/types/database'
 
 const DEFAULT_HOURLY_RATE = 15000
+
+function isHoursOnlyType(projectType: ProjectType): boolean {
+  return projectType === 'bug_report' || projectType === 'fix_request'
+}
 
 function getEstimateMode(projectType: ProjectType): EstimateMode {
   switch (projectType) {
@@ -72,6 +81,12 @@ async function estimateHoursWithClaude(
 - feature_addition: 15-25%
 - new_project: 15-25%
 
+見積もり時の考慮事項:
+- 添付資料の技術スタックやアーキテクチャ情報がある場合、フレームワーク固有の工数を反映してください
+- リスクや変更影響ポイントがある場合、バッファ時間に適切に反映してください
+- 主要モジュール情報がある場合、実装工数の精度を向上させてください
+- 既存コードベースの規模や複雑さを考慮してください
+
 制約:
 - 回答は必ずJSONのみで返す
 - total は各項目の合計と一致させる`
@@ -109,6 +124,7 @@ interface AutoGenerateEstimateInput {
   projectType: ProjectType
   specMarkdown: string
   attachmentContext?: string | null
+  businessLine?: BusinessLine | null
   usageContext?: {
     projectId?: string | null
     actorClerkUserId?: string | null
@@ -120,6 +136,7 @@ interface AutoGenerateEstimateResult {
   totalHours: number
   hourlyRate: number
   estimateMode: EstimateMode
+  goNoGoDecision?: string
 }
 
 export async function autoGenerateEstimate(
@@ -246,12 +263,12 @@ export async function autoGenerateEstimate(
     }
   }
 
-  const pricing = calculatePrice({
+  const pricing = isHoursOnlyType(projectType) ? null : calculatePrice({
     policy,
     market: marketAssumption,
     selectedCoefficient: undefined,
   })
-  const riskFlags = [...pricing.riskFlags]
+  const riskFlags = [...(pricing?.riskFlags ?? [])]
   if (!evidenceRequirementMet) {
     riskFlags.push('insufficient_evidence_sources')
   }
@@ -259,15 +276,89 @@ export async function autoGenerateEstimate(
     riskFlags.push('market_evidence_fallback_used')
   }
 
+  // Find similar projects
+  const similarProjects = await findSimilarProjects({
+    supabase,
+    specMarkdown,
+    projectType,
+    businessLine: input.businessLine ?? undefined,
+    attachmentContext: attachmentContext || undefined,
+  })
+
+  // Fetch velocity data for best matching similar project
+  let velocityData: Record<string, unknown> | null = null
+  if (similarProjects.length > 0) {
+    const { data: velocityRef } = await supabase
+      .from('github_references')
+      .select('velocity_data')
+      .eq('id', similarProjects[0].githubReferenceId)
+      .maybeSingle()
+    velocityData = velocityRef?.velocity_data ?? null
+  }
+
+  // Module decomposition (for new_project / feature_addition)
+  let implementationPlan: ImplementationPlan | null = null
+  if (projectType === 'new_project' || projectType === 'feature_addition') {
+    try {
+      implementationPlan = await generateImplementationPlan({
+        specMarkdown,
+        projectType,
+        attachmentContext: attachmentContext || undefined,
+        usageContext,
+      })
+    } catch {
+      // Module decomposition failed — continue without it
+    }
+  }
+
+  // Code impact analysis (if attachment context available)
+  let codeImpact: CodeImpactAnalysis | null = null
+  if (attachmentContext) {
+    try {
+      codeImpact = await analyzeCodeImpact({
+        repoAnalysis: attachmentContext,
+        specMarkdown,
+        projectType,
+        usageContext,
+      })
+    } catch {
+      // Code impact analysis failed — continue without it
+    }
+  }
+
+  // Speed advantage calculation
+  const speedAdvantage = calculateSpeedAdvantage({
+    similarProjects,
+    velocityData,
+    marketTeamSize: marketAssumption.teamSize,
+    marketDurationMonths: marketAssumption.durationMonths,
+    ourHoursEstimate: hours.total,
+    policy,
+  })
+
+  // Evaluate Go/No-Go
+  let goNoGoResult: GoNoGoResult | null = null
+  if (input.businessLine && pricing) {
+    goNoGoResult = await evaluateGoNoGo({
+      supabase,
+      projectId,
+      projectType,
+      businessLine: input.businessLine,
+      pricingResult: pricing,
+      specMarkdown,
+      riskFlags,
+    })
+  }
+
   const approvalTriggers = buildApprovalTriggersFromRiskFlags({
     riskFlags,
     projectType,
-    pricingContext: {
+    pricingContext: pricing ? {
       market_total: pricing.marketTotal,
       our_price: pricing.ourPrice,
       cost_floor: pricing.costFloor,
       margin_percent: pricing.marginPercent,
-    },
+    } : undefined,
   })
   const approvalRequired = approvalTriggers.length > 0
   const approvalStatus = approvalRequired
@@ -279,10 +370,10 @@ export async function autoGenerateEstimate(
     approvalStatus,
   })
 
-  const hoursBasedCost = hourlyRate * hours.total
-  const recommendedTotalCost = Math.max(
-    pricing.ourPrice,
-    hoursBasedCost,
+  const hoursBasedCost = isHoursOnlyType(projectType) ? null : hourlyRate * hours.total
+  const recommendedTotalCost = isHoursOnlyType(projectType) ? null : Math.max(
+    pricing!.ourPrice,
+    hoursBasedCost!,
     policy.minimumProjectFee
   )
 
@@ -319,14 +410,21 @@ export async function autoGenerateEstimate(
       total_market_cost: totalMarketCost,
       comparison_report: null,
       grok_market_data: marketData,
-      similar_projects: null,
-      pricing_snapshot: {
-        policy,
-        market_assumption: marketAssumption,
-        calculated: pricing,
-        recommended_total_cost: recommendedTotalCost,
-        hours_based_cost: hoursBasedCost,
-      },
+      similar_projects: similarProjects.length > 0 ? similarProjects : null,
+      go_no_go_result: goNoGoResult,
+      value_proposition: null,
+      pricing_snapshot: isHoursOnlyType(projectType)
+        ? { hours_only: true, hourly_rate: hourlyRate, total_hours: hours.total }
+        : {
+            policy,
+            market_assumption: marketAssumption,
+            calculated: pricing,
+            recommended_total_cost: recommendedTotalCost,
+            hours_based_cost: hoursBasedCost,
+            implementation_plan: implementationPlan,
+            code_impact: codeImpact,
+            speed_advantage: speedAdvantage,
+          },
       risk_flags: riskFlags,
       market_evidence_id: marketEvidenceRecordId,
     })
@@ -373,5 +471,6 @@ export async function autoGenerateEstimate(
     totalHours: hours.total,
     hourlyRate,
     estimateMode,
+    goNoGoDecision: goNoGoResult?.decision,
   }
 }

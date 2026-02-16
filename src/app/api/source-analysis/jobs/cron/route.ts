@@ -8,6 +8,8 @@ import {
   readCronTokenFromHeaders,
 } from '@/lib/source-analysis/cron'
 import { sourceAnalysisRunRequestSchema } from '@/lib/utils/validation'
+import { applyRateLimit } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 
 const DEFAULT_CRON_LIMIT = 5
 
@@ -21,6 +23,9 @@ function resolveCronLimit(value: string | undefined): number {
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimited = applyRateLimit(request, 'source-analysis:cron:post', RATE_LIMITS['source-analysis:cron:post'])
+    if (rateLimited) return rateLimited
+
     const providedToken = readCronTokenFromHeaders(request.headers)
     const expectedSecret = process.env.SOURCE_ANALYSIS_CRON_SECRET
     if (!isValidCronToken({ expectedSecret, providedToken })) {

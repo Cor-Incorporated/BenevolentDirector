@@ -4,7 +4,8 @@ import { sendMessage, type ChatMessage } from '@/lib/ai/anthropic'
 import { parseJsonFromResponse } from '@/lib/ai/xai'
 import { getSystemPrompt, getSpecGenerationPrompt } from '@/lib/ai/system-prompts'
 import { sendMessageSchema } from '@/lib/utils/validation'
-import { checkRateLimit } from '@/lib/utils/rate-limit'
+import { applyRateLimit } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 import { buildProjectAttachmentContext } from '@/lib/source-analysis/project-context'
 import { getAuthenticatedUser, canAccessProject } from '@/lib/auth/authorization'
 import { writeAuditLog } from '@/lib/audit/log'
@@ -70,17 +71,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const rateLimit = checkRateLimit(`conversations:${authUser.clerkUserId}`, {
-      maxRequests: 20,
-      windowMs: 60000,
-    })
-
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        { success: false, error: 'リクエスト制限を超えました。しばらくお待ちください。' },
-        { status: 429 }
-      )
-    }
+    const rateLimited = applyRateLimit(
+      request,
+      'conversations:post',
+      RATE_LIMITS['conversations:post'],
+      authUser.clerkUserId
+    )
+    if (rateLimited) return rateLimited
 
     const body = await request.json()
     const validated = sendMessageSchema.parse(body)
@@ -275,6 +272,14 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       )
     }
+
+    const rateLimitedGet = applyRateLimit(
+      request,
+      'conversations:get',
+      RATE_LIMITS['conversations:get'],
+      authUser.clerkUserId
+    )
+    if (rateLimitedGet) return rateLimitedGet
 
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('project_id')

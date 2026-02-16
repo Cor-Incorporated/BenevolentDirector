@@ -4,12 +4,15 @@ import { parseJsonFromResponse } from '@/lib/ai/xai'
 import { getSystemPrompt, getSpecGenerationPrompt } from '@/lib/ai/system-prompts'
 import { sendMessage } from '@/lib/ai/anthropic'
 import { sendMessageSchema } from '@/lib/utils/validation'
-import { checkRateLimit } from '@/lib/utils/rate-limit'
+import { applyRateLimitRaw } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 import { buildProjectAttachmentContext } from '@/lib/source-analysis/project-context'
 import { getAuthenticatedUser, canAccessProject } from '@/lib/auth/authorization'
 import { writeAuditLog } from '@/lib/audit/log'
 import { isExternalApiQuotaError } from '@/lib/usage/api-usage'
-import type { ProjectType, ConversationMetadata, ConcreteProjectType } from '@/types/database'
+import { classifyBusinessLine } from '@/lib/business-line/classifier'
+import { generateValueProposition } from '@/lib/estimates/value-proposition'
+import type { ProjectType, ConversationMetadata, ConcreteProjectType, BusinessLine } from '@/types/database'
 
 const METADATA_DELIMITER = '---METADATA---'
 
@@ -81,17 +84,13 @@ export async function POST(request: Request) {
       )
     }
 
-    const rateLimit = checkRateLimit(`conversations:${authUser.clerkUserId}`, {
-      maxRequests: 20,
-      windowMs: 60000,
-    })
-
-    if (!rateLimit.allowed) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'リクエスト制限を超えました。しばらくお待ちください。' }),
-        { status: 429, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
+    const rateLimited = applyRateLimitRaw(
+      request,
+      'conversations:stream:post',
+      RATE_LIMITS['conversations:stream:post'],
+      authUser.clerkUserId
+    )
+    if (rateLimited) return rateLimited
 
     const body = await request.json()
     const validated = sendMessageSchema.parse(body)
@@ -310,6 +309,35 @@ export async function POST(request: Request) {
               },
             })
 
+            // Classify business line
+            let classifiedBusinessLine: BusinessLine | null = null
+            try {
+              const classification = await classifyBusinessLine({
+                specMarkdown,
+                projectType: currentType,
+                attachmentContext: attachmentContext || undefined,
+                usageContext: {
+                  projectId: validated.project_id,
+                  actorClerkUserId: authUser.clerkUserId,
+                },
+              })
+
+              classifiedBusinessLine = classification.businessLine as BusinessLine
+
+              await supabase
+                .from('projects')
+                .update({ business_line: classification.businessLine })
+                .eq('id', validated.project_id)
+
+              sendEvent('business_line_classified', {
+                business_line: classification.businessLine,
+                confidence: classification.confidence,
+              })
+            } catch (classifyError) {
+              const msg = classifyError instanceof Error ? classifyError.message : '事業ライン分類に失敗'
+              sendEvent('business_line_error', { error: msg })
+            }
+
             // Auto-generate estimate
             try {
               const { autoGenerateEstimate } = await import('@/lib/estimates/auto-generate')
@@ -319,6 +347,7 @@ export async function POST(request: Request) {
                 projectType: currentType,
                 specMarkdown,
                 attachmentContext,
+                businessLine: classifiedBusinessLine,
                 usageContext: {
                   projectId: validated.project_id,
                   actorClerkUserId: authUser.clerkUserId,
@@ -335,7 +364,72 @@ export async function POST(request: Request) {
                 total_hours: estimateResult.totalHours,
                 hourly_rate: estimateResult.hourlyRate,
                 estimate_mode: estimateResult.estimateMode,
+                go_no_go_decision: estimateResult.goNoGoDecision ?? null,
               })
+
+              // Generate value proposition
+              if (classifiedBusinessLine && estimateResult.estimateId) {
+                try {
+                  const { findSimilarProjects } = await import('@/lib/estimates/similar-projects')
+                  const { evaluateGoNoGo } = await import('@/lib/approval/go-no-go')
+                  const { fetchActivePricingPolicy } = await import('@/lib/pricing/policies')
+                  const { calculatePrice } = await import('@/lib/pricing/engine')
+
+                  const [similarProjects, policy] = await Promise.all([
+                    findSimilarProjects({
+                      supabase,
+                      specMarkdown,
+                      projectType: currentType,
+                      businessLine: classifiedBusinessLine,
+                    }),
+                    fetchActivePricingPolicy(supabase, currentType),
+                  ])
+
+                  const pricing = calculatePrice({
+                    policy,
+                    market: {
+                      teamSize: policy.defaultTeamSize,
+                      durationMonths: policy.defaultDurationMonths,
+                      monthlyUnitPrice: policy.avgInternalCostPerMemberMonth,
+                    },
+                  })
+
+                  const goNoGoResult = await evaluateGoNoGo({
+                    supabase,
+                    projectId: validated.project_id,
+                    projectType: currentType,
+                    businessLine: classifiedBusinessLine,
+                    pricingResult: pricing,
+                    specMarkdown,
+                    riskFlags: pricing.riskFlags,
+                  })
+
+                  const valueProp = await generateValueProposition({
+                    specMarkdown,
+                    similarProjects,
+                    goNoGoResult,
+                    pricingResult: pricing,
+                    businessLine: classifiedBusinessLine,
+                    usageContext: {
+                      projectId: validated.project_id,
+                      actorClerkUserId: authUser.clerkUserId,
+                    },
+                  })
+
+                  await supabase
+                    .from('estimates')
+                    .update({ value_proposition: valueProp as unknown as Record<string, unknown> })
+                    .eq('id', estimateResult.estimateId)
+
+                  sendEvent('value_proposition_generated', {
+                    estimate_id: estimateResult.estimateId,
+                    business_line: classifiedBusinessLine,
+                    go_no_go_decision: estimateResult.goNoGoDecision ?? null,
+                  })
+                } catch {
+                  // Value proposition generation is non-critical
+                }
+              }
             } catch (estimateError) {
               const estimateErrorMsg = estimateError instanceof Error ? estimateError.message : '見積り自動生成に失敗'
               sendEvent('estimate_error', { error: estimateErrorMsg })

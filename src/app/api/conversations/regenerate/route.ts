@@ -2,7 +2,8 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 import { sendMessageStream, type ChatMessage } from '@/lib/ai/anthropic'
 import { parseJsonFromResponse } from '@/lib/ai/xai'
 import { getSystemPrompt } from '@/lib/ai/system-prompts'
-import { checkRateLimit } from '@/lib/utils/rate-limit'
+import { applyRateLimitRaw } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 import { buildProjectAttachmentContext } from '@/lib/source-analysis/project-context'
 import { getAuthenticatedUser, canAccessProject } from '@/lib/auth/authorization'
 import { isExternalApiQuotaError } from '@/lib/usage/api-usage'
@@ -84,17 +85,13 @@ export async function POST(request: Request) {
       )
     }
 
-    const rateLimit = checkRateLimit(`regenerate:${authUser.clerkUserId}`, {
-      maxRequests: 10,
-      windowMs: 60000,
-    })
-
-    if (!rateLimit.allowed) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'リクエスト制限を超えました。しばらくお待ちください。' }),
-        { status: 429, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
+    const rateLimited = applyRateLimitRaw(
+      request,
+      'conversations:regenerate:post',
+      RATE_LIMITS['conversations:regenerate:post'],
+      authUser.clerkUserId
+    )
+    if (rateLimited) return rateLimited
 
     const body = await request.json()
     const validated = regenerateSchema.parse(body)

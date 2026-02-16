@@ -7,6 +7,8 @@ import {
 } from '@/lib/auth/authorization'
 import { writeAuditLog } from '@/lib/audit/log'
 import { buildFollowUpQuestion } from '@/lib/intake/completeness'
+import { applyRateLimit } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 import type { IntakeIntentType } from '@/types/database'
 
 const INTAKE_INTENTS: IntakeIntentType[] = [
@@ -130,6 +132,9 @@ export async function GET(
     if (!authUser) {
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
+
+    const rateLimitedGet = applyRateLimit(_request, 'change-requests:ready-packet:get', RATE_LIMITS['change-requests:ready-packet:get'], authUser.clerkUserId)
+    if (rateLimitedGet) return rateLimitedGet
 
     const supabase = await createServiceRoleClient()
     const internalRoles = await getInternalRoles(

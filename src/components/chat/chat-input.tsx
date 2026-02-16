@@ -52,6 +52,7 @@ export function ChatInput({
   const [sending, setSending] = useState(false)
   const [attachmentMessage, setAttachmentMessage] = useState<string | null>(null)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const {
@@ -72,19 +73,29 @@ export function ChatInput({
   const isBusy = disabled || sending
   const hasContent = input.trim() || stagedFiles.length > 0 || stagedUrl.trim()
 
-  const runQueuedAnalysis = async () => {
+  const runQueuedAnalysis = async (fileCount = 1) => {
     try {
-      await fetch('/api/source-analysis/jobs/run', {
+      const response = await fetch('/api/source-analysis/jobs/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: projectId,
-          limit: 1,
+          limit: Math.max(fileCount, 1),
         }),
       })
       await onAttachmentUpdated()
+
+      if (!response.ok) {
+        try {
+          const result = await response.json()
+          return (result as AttachmentApiResponse).error ?? '添付資料の解析に失敗しました'
+        } catch {
+          return '添付資料の解析に失敗しました'
+        }
+      }
+      return null
     } catch {
-      // silent — user can retry later
+      return '添付資料の解析中にエラーが発生しました'
     }
   }
 
@@ -158,8 +169,15 @@ export function ChatInput({
       }
 
       if (needsAnalysis) {
+        setIsAnalyzing(true)
         await onAttachmentUpdated()
-        await runQueuedAnalysis()
+        const totalCount = stagedFiles.length + (stagedUrl.trim() ? 1 : 0)
+        const analysisError = await runQueuedAnalysis(totalCount)
+        setIsAnalyzing(false)
+        if (analysisError) {
+          setAttachmentError(analysisError)
+          // エラーでもメッセージ送信は続行
+        }
       }
 
       const trimmed = input.trim()
@@ -411,6 +429,12 @@ export function ChatInput({
         )}
         {attachmentMessage && (
           <p className="text-xs text-emerald-700 text-pretty">{attachmentMessage}</p>
+        )}
+        {isAnalyzing && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
+            <span className="inline-block h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+            添付資料を解析中です...
+          </div>
         )}
         {attachmentError && (
           <p className="text-xs text-destructive text-pretty">{attachmentError}</p>

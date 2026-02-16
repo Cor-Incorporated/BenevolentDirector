@@ -3,6 +3,8 @@ import { auth, currentUser } from '@clerk/nextjs/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { createProjectSchema } from '@/lib/utils/validation'
 import { writeAuditLog } from '@/lib/audit/log'
+import { applyRateLimit } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,6 +16,9 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
+
+    const rateLimited = applyRateLimit(request, 'projects:post', RATE_LIMITS['projects:post'], userId)
+    if (rateLimited) return rateLimited
 
     const body = await request.json()
     const validatedProject = createProjectSchema

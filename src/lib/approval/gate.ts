@@ -16,7 +16,7 @@ function hasFlag(riskFlags: string[], flag: string): boolean {
 export function buildApprovalTriggersFromRiskFlags(input: {
   riskFlags: string[]
   projectType: string
-  pricingContext: Record<string, unknown>
+  pricingContext?: Record<string, unknown>
 }): ApprovalTrigger[] {
   const triggers: ApprovalTrigger[] = []
 
@@ -28,7 +28,7 @@ export function buildApprovalTriggersFromRiskFlags(input: {
       context: {
         risk_flag: 'FLOOR_BREACH',
         project_type: input.projectType,
-        ...input.pricingContext,
+        ...(input.pricingContext ?? {}),
       },
     })
   }
@@ -41,7 +41,7 @@ export function buildApprovalTriggersFromRiskFlags(input: {
       context: {
         risk_flag: 'LOW_MARGIN',
         project_type: input.projectType,
-        ...input.pricingContext,
+        ...(input.pricingContext ?? {}),
       },
     })
   }
@@ -54,7 +54,7 @@ export function buildApprovalTriggersFromRiskFlags(input: {
       context: {
         risk_flag: 'DELTA_BELOW_FLOOR',
         project_type: input.projectType,
-        ...input.pricingContext,
+        ...(input.pricingContext ?? {}),
       },
     })
   }

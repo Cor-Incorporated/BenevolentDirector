@@ -9,6 +9,8 @@ import {
 } from '@/lib/auth/authorization'
 import { writeAuditLog } from '@/lib/audit/log'
 import { approvalRequestCreateSchema } from '@/lib/utils/validation'
+import { applyRateLimit } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,6 +18,9 @@ export async function GET(request: NextRequest) {
     if (!authUser) {
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
+
+    const rateLimitedGet = applyRateLimit(request, 'admin:approval-requests:get', RATE_LIMITS['admin:approval-requests:get'], authUser.clerkUserId)
+    if (rateLimitedGet) return rateLimitedGet
 
     const supabase = await createServiceRoleClient()
     const internalRoles = await getInternalRoles(
@@ -80,6 +85,9 @@ export async function POST(request: NextRequest) {
     if (!authUser) {
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
+
+    const rateLimited = applyRateLimit(request, 'admin:approval-requests:post', RATE_LIMITS['admin:approval-requests:post'], authUser.clerkUserId)
+    if (rateLimited) return rateLimited
 
     const supabase = await createServiceRoleClient()
     const internalRoles = await getInternalRoles(

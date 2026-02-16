@@ -4,6 +4,8 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser, isAdminUser } from '@/lib/auth/authorization'
 import { writeAuditLog } from '@/lib/audit/log'
 import { adminProfileSchema } from '@/lib/utils/validation'
+import { applyRateLimit } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 
 const DEFAULT_ADMIN_HOURLY_RATE = 15000
 
@@ -27,12 +29,15 @@ function resolveDisplayName(input: {
   return ''
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const authUser = await getAuthenticatedUser()
     if (!authUser) {
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
+
+    const rateLimited = applyRateLimit(request, 'admin:profile:get', RATE_LIMITS['admin:profile:get'], authUser.clerkUserId)
+    if (rateLimited) return rateLimited
 
     const supabase = await createServiceRoleClient()
     const admin = await isAdminUser(supabase, authUser.clerkUserId, authUser.email)
@@ -75,6 +80,9 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
 
+    const rateLimited = applyRateLimit(request, 'admin:profile:put', RATE_LIMITS['admin:profile:put'], authUser.clerkUserId)
+    if (rateLimited) return rateLimited
+
     const supabase = await createServiceRoleClient()
     const admin = await isAdminUser(supabase, authUser.clerkUserId, authUser.email)
     if (!admin) {
@@ -84,16 +92,19 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const validated = adminProfileSchema.parse(body)
 
+    const upsertPayload: Record<string, unknown> = {
+      clerk_user_id: authUser.clerkUserId,
+      display_name: validated.display_name,
+      default_hourly_rate: validated.default_hourly_rate,
+    }
+
+    if (validated.github_orgs !== undefined) {
+      upsertPayload.github_orgs = validated.github_orgs
+    }
+
     const { data, error } = await supabase
       .from('admins')
-      .upsert(
-        {
-          clerk_user_id: authUser.clerkUserId,
-          display_name: validated.display_name,
-          default_hourly_rate: validated.default_hourly_rate,
-        },
-        { onConflict: 'clerk_user_id' }
-      )
+      .upsert(upsertPayload, { onConflict: 'clerk_user_id' })
       .select('id, clerk_user_id, display_name, default_hourly_rate, github_orgs')
       .single()
 

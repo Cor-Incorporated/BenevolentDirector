@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { intakeFollowUpRequestSchema } from '@/lib/utils/validation'
 import { buildFollowUpQuestion } from '@/lib/intake/completeness'
+import { applyRateLimit, getClientIdentifier } from '@/lib/utils/rate-limit'
+import { RATE_LIMITS } from '@/lib/utils/rate-limit-config'
 
 const CHOICE_HINTS: Record<string, string[]> = {
   urgency: ['critical', 'high', 'medium', 'low'],
@@ -10,6 +12,10 @@ const CHOICE_HINTS: Record<string, string[]> = {
 
 export async function POST(request: NextRequest) {
   try {
+    const clientId = getClientIdentifier(request)
+    const rateLimited = applyRateLimit(request, 'intake:follow-up:post', RATE_LIMITS['intake:follow-up:post'], clientId)
+    if (rateLimited) return rateLimited
+
     const body = await request.json()
     const validated = intakeFollowUpRequestSchema.parse(body)
 

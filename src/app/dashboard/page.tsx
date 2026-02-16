@@ -119,7 +119,7 @@ export default async function DashboardPage() {
               const canOpenChat = interviewableStatuses.has(project.status)
 
               const card = (
-                <Card className={`h-full transition-colors ${canOpenChat ? 'hover:bg-accent/50' : ''}`}>
+                <Card className="h-full transition-colors hover:bg-accent/50">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">
@@ -161,7 +161,11 @@ export default async function DashboardPage() {
                 )
               }
 
-              return <div key={project.id}>{card}</div>
+              return (
+                <Link key={project.id} href={`/projects/${project.id}`}>
+                  {card}
+                </Link>
+              )
             })}
           </div>
         ) : (

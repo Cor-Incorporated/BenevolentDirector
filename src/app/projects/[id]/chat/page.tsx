@@ -6,6 +6,7 @@ import { ChatMessages } from '@/components/chat/chat-messages'
 import { ChatInput } from '@/components/chat/chat-input'
 import { ChatHeader } from '@/components/chat/chat-header'
 import { ProgressBar } from '@/components/chat/progress-bar'
+import { useRealtimeConversations } from '@/hooks/use-realtime-conversations'
 import type { Conversation, ConversationMetadata, ProjectType } from '@/types/database'
 
 export default function ChatPage() {
@@ -20,6 +21,8 @@ export default function ChatPage() {
   const [isComplete, setIsComplete] = useState(false)
   const [projectType, setProjectType] = useState<ProjectType>('undetermined')
   const [error, setError] = useState<string | null>(null)
+  const [businessLine, setBusinessLine] = useState<string | null>(null)
+  const [goNoGoDecision, setGoNoGoDecision] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const initialMessageSentRef = useRef(false)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -27,6 +30,18 @@ export default function ChatPage() {
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
+
+  useRealtimeConversations({
+    projectId,
+    onNewMessage: useCallback((message: Conversation) => {
+      if (isStreaming) return
+      setConversations((prev) => {
+        const exists = prev.some((c) => c.id === message.id)
+        if (exists) return prev
+        return [...prev, message]
+      })
+    }, [isStreaming]),
+  })
 
   useEffect(() => {
     const loadConversations = async () => {
@@ -161,8 +176,17 @@ export default function ChatPage() {
               }
 
               if ('estimate_id' in data) {
-                // Estimate auto-generated notification - no action needed on client
-                // The estimate will be visible in the admin panel
+                // Estimate auto-generated
+              }
+
+              // business_line_classified イベント
+              if ('business_line' in data && 'confidence' in data) {
+                setBusinessLine(data.business_line as string)
+              }
+
+              // go_no_go_decision イベント
+              if ('go_no_go_decision' in data) {
+                setGoNoGoDecision(data.go_no_go_decision as string)
               }
 
               if ('message_id' in data && !('token' in data)) {
@@ -289,6 +313,24 @@ export default function ChatPage() {
               onRetry={handleRetry}
               lastUserMessageId={lastUserMessage?.id}
             />
+          )}
+          {isComplete && (businessLine || goNoGoDecision) && (
+            <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+              {businessLine && (
+                <span className="rounded bg-muted px-2 py-0.5">
+                  事業ライン: {businessLine}
+                </span>
+              )}
+              {goNoGoDecision && (
+                <span className={`rounded px-2 py-0.5 ${
+                  goNoGoDecision === 'go' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                  goNoGoDecision === 'go_with_conditions' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                  'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                }`}>
+                  Go/No-Go: {goNoGoDecision}
+                </span>
+              )}
+            </div>
           )}
           {error && (
             <div className="mt-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
