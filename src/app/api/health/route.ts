@@ -34,6 +34,7 @@ export async function GET(): Promise<NextResponse<HealthCheck>> {
 
   let dbStatus: 'up' | 'down' = 'down'
   let dbLatency = 0
+  let dbError: string | undefined
 
   try {
     const startTime = Date.now()
@@ -41,20 +42,23 @@ export async function GET(): Promise<NextResponse<HealthCheck>> {
 
     const { error } = await supabase
       .from('projects')
-      .select('1', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
 
     const latency = Date.now() - startTime
     dbStatus = error ? 'down' : 'up'
     dbLatency = latency
-  } catch {
+    if (error) dbError = error.message
+  } catch (e) {
     dbStatus = 'down'
     dbLatency = -1
+    dbError = e instanceof Error ? e.message : String(e)
   }
 
   const checks: HealthCheck['checks'] = {
     database: {
       status: dbStatus,
       latency_ms: dbLatency,
+      ...(dbError ? { error: dbError } : {}),
     },
     clerk: {
       status: process.env.CLERK_SECRET_KEY ? 'up' : 'down',
