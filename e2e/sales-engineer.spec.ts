@@ -53,8 +53,8 @@ test.describe('Sales Engineer Pipeline - E2E', () => {
     await page.goto('/')
 
     // The progress bar component renders interview categories as badges
-    // On the home page, project type badges are visible
-    const badges = page.locator('[class*="badge"], [class*="Badge"]')
+    // On the home page, project type badges are visible (shadcn/ui uses data-slot="badge")
+    const badges = page.locator('[data-slot="badge"]')
     // The home page should have at least the 4 project type badges
     const count = await badges.count()
     expect(count).toBeGreaterThanOrEqual(4)
