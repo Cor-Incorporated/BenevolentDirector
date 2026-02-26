@@ -59,16 +59,20 @@ async function handleVelocityCronRequest(request: NextRequest) {
     limit: validated.limit ?? defaultLimit,
   })
 
-  await writeAuditLog(supabase, {
-    actorClerkUserId,
-    action: 'github_velocity.cron_run',
-    resourceType: 'github_reference',
-    resourceId: 'batch',
-    payload: {
-      limit: validated.limit ?? defaultLimit,
-      ...result,
-    },
-  })
+  try {
+    await writeAuditLog(supabase, {
+      actorClerkUserId,
+      action: 'github_velocity.cron_run',
+      resourceType: 'github_reference',
+      resourceId: 'batch',
+      payload: {
+        limit: validated.limit ?? defaultLimit,
+        ...result,
+      },
+    })
+  } catch {
+    // Audit log failure should not turn a completed batch into 500
+  }
 
   return NextResponse.json({ success: true, data: result })
 }

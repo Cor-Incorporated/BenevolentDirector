@@ -86,14 +86,24 @@ export async function runVelocityCronBatch(
       }
 
       // Backfill hours_spent from velocity estimate only if not already set
+      // Use .is('hours_spent', null) in SQL to prevent TOCTOU overwrite
       if (repo.hours_spent === null && velocity.estimatedHours > 0) {
-        await supabase
+        const { error: backfillError } = await supabase
           .from('github_references')
           .update({
             hours_spent: Math.round(velocity.estimatedHours),
             updated_at: new Date().toISOString(),
           })
           .eq('id', repo.id)
+          .is('hours_spent', null)
+
+        if (backfillError) {
+          logger.warn('velocity-cron: hours_spent backfill failed', {
+            repoId: repo.id,
+            fullName,
+            error: backfillError.message,
+          })
+        }
       }
 
       result.succeeded += 1

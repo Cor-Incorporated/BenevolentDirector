@@ -56,7 +56,9 @@ function createMockSupabase(options: {
   updateError?: { message: string } | null
 }) {
   const updateFn = vi.fn().mockReturnValue({
-    eq: vi.fn().mockResolvedValue({ error: options.updateError ?? null }),
+    eq: vi.fn().mockReturnValue({
+      is: vi.fn().mockResolvedValue({ error: options.updateError ?? null }),
+    }),
   })
 
   const limitFn = vi.fn().mockResolvedValue({
@@ -269,7 +271,8 @@ describe('runVelocityCronBatch', () => {
     const velocity = createMockVelocity({ estimatedHours: 200 })
     mockAnalyzeAndSaveVelocity.mockResolvedValue(velocity)
 
-    const updateEqMock = vi.fn().mockResolvedValue({ error: null })
+    const updateIsMock = vi.fn().mockResolvedValue({ error: null })
+    const updateEqMock = vi.fn().mockReturnValue({ is: updateIsMock })
     const updateMock = vi.fn().mockReturnValue({ eq: updateEqMock })
 
     // Build a more explicit mock for the update path
@@ -310,6 +313,7 @@ describe('runVelocityCronBatch', () => {
       })
     )
     expect(updateEqMock).toHaveBeenCalledWith('id', 'r1')
+    expect(updateIsMock).toHaveBeenCalledWith('hours_spent', null)
   })
 
   it('does NOT overwrite existing hours_spent', async () => {
