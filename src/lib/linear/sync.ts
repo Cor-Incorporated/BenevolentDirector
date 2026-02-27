@@ -175,6 +175,7 @@ export async function syncEstimateToLinear(
       .from('estimates')
       .update({
         linear_project_id: linearProject.id,
+        linear_project_url: linearProject.url,
         linear_sync_status: 'synced',
       })
       .eq('id', estimateId)
