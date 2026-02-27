@@ -19,6 +19,13 @@ export default defineConfig({
         'src/types/**',
         'src/components/ui/**',
       ],
+      // Thresholds will be enforced after test coverage reaches target (fix/test-coverage-80)
+      // thresholds: {
+      //   statements: 80,
+      //   branches: 80,
+      //   functions: 80,
+      //   lines: 80,
+      // },
     },
   },
   resolve: {
