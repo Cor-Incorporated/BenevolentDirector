@@ -1,5 +1,6 @@
 # dependencies
 /node_modules
+**/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -10,16 +11,19 @@
 
 # testing
 /coverage
+**/coverage
 /test-results
 /playwright-report
 /blob-report
 
-# next.js
+# next.js (v1)
 /.next/
 /out/
+v1/.next/
 
 # production
 /build
+**/dist
 
 # misc
 .DS_Store
@@ -51,6 +55,7 @@ firebase-debug.log
 
 # supabase temp
 supabase/.temp/
+v1/supabase/.temp/
 
 # IDE
 .idea/
@@ -59,6 +64,23 @@ supabase/.temp/
 *.swo
 .claude/
 
-# project local
-/log/
-supabase/.temp/
+# Go
+services/control-api/server
+services/control-api/control-api
+**/__debug_bin*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+*.egg
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Docker
+docker-compose.override.yml
