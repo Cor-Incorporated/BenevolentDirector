@@ -29,8 +29,9 @@ class TestLoadConfig:
 
     def test_raises_when_env_vars_missing(self) -> None:
         """ValueError is raised listing all missing variables."""
-        with patch.dict(os.environ, {}, clear=True), pytest.raises(
-            ValueError, match="PUBSUB_PROJECT_ID"
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            pytest.raises(ValueError, match="PUBSUB_PROJECT_ID"),
         ):
             load_config()
 
