@@ -103,6 +103,20 @@ module "pubsub" {
 }
 
 # -----------------------------------------------------
+# BigQuery (Velocity Analytics)
+# -----------------------------------------------------
+module "bigquery" {
+  source = "../../modules/bigquery"
+
+  project_id  = var.project_id
+  region      = var.region
+  environment = "staging"
+
+  expiration_days            = 365
+  delete_contents_on_destroy = false
+}
+
+# -----------------------------------------------------
 # IAM (Service Accounts + Permissions)
 # -----------------------------------------------------
 module "iam" {
@@ -116,4 +130,19 @@ module "iam" {
   pubsub_dead_letter_topic_ids = module.pubsub.dead_letter_topic_ids
   source_documents_bucket_name = module.storage.source_documents_bucket_name
   exports_bucket_name          = module.storage.exports_bucket_name
+}
+
+# -----------------------------------------------------
+# Scheduler (Cloud Scheduler — Crawl Job Trigger)
+# -----------------------------------------------------
+module "scheduler" {
+  source = "../../modules/scheduler"
+
+  project_id  = var.project_id
+  region      = var.region
+  environment = "staging"
+
+  schedule              = "0 2 * * *" # 2 AM JST daily
+  target_uri            = "https://bd-staging-crawler-${var.region}.a.run.app"
+  service_account_email = module.iam.control_api_service_account_email
 }
