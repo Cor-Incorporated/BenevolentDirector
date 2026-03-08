@@ -113,6 +113,7 @@ module "bigquery" {
 
   expiration_days            = 90
   delete_contents_on_destroy = true
+  deletion_protection        = false
 }
 
 # -----------------------------------------------------

@@ -37,8 +37,8 @@ variable "expiration_days" {
   default     = 365
 
   validation {
-    condition     = var.expiration_days >= 1
-    error_message = "expiration_days must be at least 1."
+    condition     = var.expiration_days >= 1 && var.expiration_days <= 3650
+    error_message = "expiration_days must be between 1 and 3650."
   }
 }
 
@@ -46,6 +46,12 @@ variable "delete_contents_on_destroy" {
   description = "Whether to delete dataset contents when the resource is destroyed"
   type        = bool
   default     = false
+}
+
+variable "deletion_protection" {
+  description = "Whether to enable deletion protection on the BigQuery table"
+  type        = bool
+  default     = true
 }
 
 variable "labels" {

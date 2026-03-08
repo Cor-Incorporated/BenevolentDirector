@@ -27,7 +27,7 @@ resource "google_bigquery_table" "velocity_metrics_history" {
   friendly_name = "Velocity Metrics History"
   description   = "Time-series velocity metrics per repository, partitioned by measurement date"
 
-  deletion_protection = false
+  deletion_protection = var.deletion_protection
 
   time_partitioning {
     type  = "DAY"
@@ -100,7 +100,7 @@ resource "google_bigquery_table" "velocity_metrics_history" {
     {
       name        = "idempotency_key"
       type        = "STRING"
-      mode        = "NULLABLE"
+      mode        = "REQUIRED"
       description = "Idempotency key for deduplication of ingested records"
     },
   ])
