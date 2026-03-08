@@ -102,6 +102,21 @@ module "pubsub" {
 }
 
 # -----------------------------------------------------
+# BigQuery (Velocity Analytics)
+# -----------------------------------------------------
+module "bigquery" {
+  source = "../../modules/bigquery"
+
+  project_id  = var.project_id
+  region      = var.region
+  environment = "dev"
+
+  expiration_days            = 90
+  delete_contents_on_destroy = true
+  deletion_protection        = false
+}
+
+# -----------------------------------------------------
 # IAM (Service Accounts + Permissions)
 # -----------------------------------------------------
 module "iam" {
