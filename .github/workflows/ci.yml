@@ -16,9 +16,14 @@ permissions:
   contents: read
 
 jobs:
-  lint:
+  # ─── v1 jobs (Next.js, runs from v1/) ───
+
+  v1-lint:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: v1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +33,7 @@ jobs:
         with:
           node-version: '20.19.0'
           cache: npm
+          cache-dependency-path: v1/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -35,9 +41,12 @@ jobs:
       - name: Lint
         run: npm run lint
 
-  type-check:
+  v1-type-check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: v1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,6 +56,7 @@ jobs:
         with:
           node-version: '20.19.0'
           cache: npm
+          cache-dependency-path: v1/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -54,9 +64,12 @@ jobs:
       - name: Type check
         run: npm run type-check
 
-  unit-tests:
+  v1-unit-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: v1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,6 +79,7 @@ jobs:
         with:
           node-version: '20.19.0'
           cache: npm
+          cache-dependency-path: v1/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -77,13 +91,16 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage
-          path: coverage
+          name: v1-coverage
+          path: v1/coverage
           if-no-files-found: ignore
 
-  migration-check:
+  v1-migration-check:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: v1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -93,6 +110,7 @@ jobs:
         with:
           node-version: '20.19.0'
           cache: npm
+          cache-dependency-path: v1/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -100,66 +118,12 @@ jobs:
       - name: Validate migration files
         run: npm run ci:migrations
 
-  v2-openapi:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.19.0'
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Validate v2 OpenAPI contract
-        run: npm run ci:v2:openapi
-
-  v2-schema:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.19.0'
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Validate v2 schema guardrails
-        run: npm run ci:v2:schema
-
-  v2-monorepo:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.19.0'
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Validate v2 monorepo scaffold
-        run: npm run ci:v2:monorepo
-
-  build:
+  v1-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: v1
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
@@ -180,6 +144,7 @@ jobs:
         with:
           node-version: '20.19.0'
           cache: npm
+          cache-dependency-path: v1/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -187,11 +152,11 @@ jobs:
       - name: Validate Clerk keys
         run: |
           if [ -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}" ]; then
-            echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is not set. Add it in GitHub Secrets."
+            echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is not set."
             exit 1
           fi
           if [ -z "${CLERK_SECRET_KEY}" ]; then
-            echo "CLERK_SECRET_KEY is not set. Add it in GitHub Secrets."
+            echo "CLERK_SECRET_KEY is not set."
             exit 1
           fi
           if [[ "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}" == "pk_test_ci_dummy" ]]; then
@@ -202,9 +167,12 @@ jobs:
       - name: Production build
         run: npm run build
 
-  e2e-smoke:
+  v1-e2e-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: v1
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
@@ -226,6 +194,7 @@ jobs:
         with:
           node-version: '20.19.0'
           cache: npm
+          cache-dependency-path: v1/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -233,11 +202,11 @@ jobs:
       - name: Validate Clerk keys
         run: |
           if [ -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}" ]; then
-            echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is not set. Add it in GitHub Secrets."
+            echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is not set."
             exit 1
           fi
           if [ -z "${CLERK_SECRET_KEY}" ]; then
-            echo "CLERK_SECRET_KEY is not set. Add it in GitHub Secrets."
+            echo "CLERK_SECRET_KEY is not set."
             exit 1
           fi
           if [[ "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}" == "pk_test_ci_dummy" ]]; then
@@ -255,9 +224,133 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
-          path: playwright-report
+          name: v1-playwright-report
+          path: v1/playwright-report
           if-no-files-found: ignore
+
+  # ─── v2 contract jobs ───
+
+  v2-openapi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.19.0'
+
+      - name: Validate v2 OpenAPI contract
+        run: node scripts/check-v2-openapi.mjs
+
+  v2-schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.19.0'
+
+      - name: Validate v2 schema guardrails
+        run: node scripts/check-v2-schema.mjs
+
+  v2-monorepo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.19.0'
+
+      - name: Validate v2 monorepo scaffold
+        run: node scripts/check-v2-monorepo.mjs
+
+  # ─── v2 service jobs ───
+
+  v2-go-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: services/control-api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.0'
+          cache-dependency-path: services/control-api/go.sum
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+  v2-python-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install tools
+        run: pip install ruff mypy
+
+      - name: Lint llm-gateway
+        run: ruff check services/llm-gateway/src/ services/llm-gateway/tests/
+
+      - name: Lint intelligence-worker
+        run: ruff check services/intelligence-worker/src/ services/intelligence-worker/tests/
+
+  v2-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.19.0'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+  # ─── dependency review ───
 
   dependency-review:
     if: ${{ github.event_name == 'pull_request' && vars.ENABLE_DEPENDENCY_REVIEW == 'true' && vars.DEPENDENCY_REVIEW_SUPPORTED == 'true' }}
@@ -270,48 +363,59 @@ jobs:
       - name: Dependency review
         uses: actions/dependency-review-action@v4
 
+  # ─── quality gate ───
+
   quality-gate:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     needs:
-      - lint
-      - type-check
-      - unit-tests
-      - migration-check
+      - v1-lint
+      - v1-type-check
+      - v1-unit-tests
+      - v1-migration-check
+      - v1-build
+      - v1-e2e-smoke
       - v2-openapi
       - v2-schema
       - v2-monorepo
-      - build
-      - e2e-smoke
+      - v2-go-build
+      - v2-python-lint
+      - v2-web
       - dependency-review
     steps:
       - name: Validate required checks
         env:
+          V1_LINT: ${{ needs.v1-lint.result }}
+          V1_TYPE_CHECK: ${{ needs.v1-type-check.result }}
+          V1_UNIT_TESTS: ${{ needs.v1-unit-tests.result }}
+          V1_MIGRATION_CHECK: ${{ needs.v1-migration-check.result }}
+          V1_BUILD: ${{ needs.v1-build.result }}
+          V1_E2E_SMOKE: ${{ needs.v1-e2e-smoke.result }}
+          V2_OPENAPI: ${{ needs.v2-openapi.result }}
+          V2_SCHEMA: ${{ needs.v2-schema.result }}
+          V2_MONOREPO: ${{ needs.v2-monorepo.result }}
+          V2_GO_BUILD: ${{ needs.v2-go-build.result }}
+          V2_PYTHON_LINT: ${{ needs.v2-python-lint.result }}
+          V2_WEB: ${{ needs.v2-web.result }}
           ENABLE_DEPENDENCY_REVIEW: ${{ vars.ENABLE_DEPENDENCY_REVIEW }}
           DEPENDENCY_REVIEW_SUPPORTED: ${{ vars.DEPENDENCY_REVIEW_SUPPORTED }}
-          LINT_RESULT: ${{ needs.lint.result }}
-          TYPE_CHECK_RESULT: ${{ needs.type-check.result }}
-          UNIT_TESTS_RESULT: ${{ needs.unit-tests.result }}
-          MIGRATION_CHECK_RESULT: ${{ needs.migration-check.result }}
-          V2_OPENAPI_RESULT: ${{ needs.v2-openapi.result }}
-          V2_SCHEMA_RESULT: ${{ needs.v2-schema.result }}
-          V2_MONOREPO_RESULT: ${{ needs.v2-monorepo.result }}
-          BUILD_RESULT: ${{ needs.build.result }}
-          E2E_SMOKE_RESULT: ${{ needs.e2e-smoke.result }}
           DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency-review.result }}
         run: |
           set -euo pipefail
 
           core_checks=(
-            LINT_RESULT
-            TYPE_CHECK_RESULT
-            UNIT_TESTS_RESULT
-            MIGRATION_CHECK_RESULT
-            V2_OPENAPI_RESULT
-            V2_SCHEMA_RESULT
-            V2_MONOREPO_RESULT
-            BUILD_RESULT
-            E2E_SMOKE_RESULT
+            V1_LINT
+            V1_TYPE_CHECK
+            V1_UNIT_TESTS
+            V1_MIGRATION_CHECK
+            V1_BUILD
+            V1_E2E_SMOKE
+            V2_OPENAPI
+            V2_SCHEMA
+            V2_MONOREPO
+            V2_GO_BUILD
+            V2_PYTHON_LINT
+            V2_WEB
           )
 
           for check_name in "${core_checks[@]}"; do
@@ -323,18 +427,8 @@ jobs:
           done
 
           if [ "${ENABLE_DEPENDENCY_REVIEW}" = "true" ] && [ "${DEPENDENCY_REVIEW_SUPPORTED}" = "true" ] && [ "${DEPENDENCY_REVIEW_RESULT}" != "success" ]; then
-            echo "Dependency review is enabled, but check did not succeed: ${DEPENDENCY_REVIEW_RESULT}"
+            echo "Dependency review failed: ${DEPENDENCY_REVIEW_RESULT}"
             exit 1
-          fi
-
-          if [ "${ENABLE_DEPENDENCY_REVIEW}" != "true" ] && [ "${DEPENDENCY_REVIEW_RESULT}" = "failure" ]; then
-            echo "Dependency review failed unexpectedly while feature is disabled."
-            exit 1
-          fi
-
-          if [ "${ENABLE_DEPENDENCY_REVIEW}" = "true" ] && [ "${DEPENDENCY_REVIEW_SUPPORTED}" != "true" ]; then
-            echo "Dependency review requested, but repository support flag is disabled."
-            echo "Set DEPENDENCY_REVIEW_SUPPORTED=true after enabling Dependency Graph and GHAS."
           fi
 
           echo "All required CI quality gates passed."

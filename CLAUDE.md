@@ -4,23 +4,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-BenevolentDirector is a Next.js (App Router) application that converts unstructured requests (Slack-style messy instructions) into structured requirements, estimates, and actionable work packets. It operates as a dashboard-only MVP for project intake, estimation, and task execution management, with Linear.app integration for post-estimate task tracking.
+BenevolentDirector is a monorepo containing both v1 (Next.js) and v2 (React + Go + Python) implementations. v2 converts unstructured requests into structured requirements, estimates, and actionable work packets for contract development firms.
+
+## Repository Structure
+
+```
+v1/                     # v1 Next.js app (reference implementation)
+apps/web/               # v2 React frontend (Vite + React 19)
+services/control-api/   # v2 Go API server (:8080)
+services/intelligence-worker/  # v2 Python async worker
+services/llm-gateway/   # v2 Python LLM router (:8081)
+packages/contracts/     # OpenAPI spec + DDL schema
+packages/config/        # Shared configuration
+packages/domain-events/ # Event schema definitions
+infra/terraform/        # GCP infrastructure
+docs/v2/                # Architecture docs + ADRs
+scripts/                # CI validation scripts
+```
 
 ## Commands
 
+### v2 (primary)
 ```bash
-npm run dev              # Dev server with Turbopack (http://localhost:3000)
-npm run build            # Production build (uses webpack, NOT turbopack)
-npm run lint             # ESLint
-npm run type-check       # tsc --noEmit
-npm run test             # Vitest (single run)
-npm run test:watch       # Vitest (watch mode)
-npm run test:coverage    # Vitest with V8 coverage
-npm run test:e2e         # Playwright (chromium, requires dev server)
-npm run ci:migrations    # Validate migration file ordering
+mise run dev             # Start infrastructure + print service start commands
+mise run lint            # Lint all v2 services (Go + Python + React)
+mise run test            # Test all v2 services
+mise run build           # Build all v2 services
+mise run fmt             # Format all v2 code
+docker compose up -d     # Start PostgreSQL + Redis + Pub/Sub emulator
 ```
 
-Run a single test file: `npx vitest run src/lib/intake/__tests__/completeness.test.ts`
+### v1 (reference, runs from v1/)
+```bash
+cd v1 && npm run dev     # Dev server with Turbopack (http://localhost:3000)
+cd v1 && npm run build   # Production build
+cd v1 && npm run test    # Vitest (single run)
+cd v1 && npm run lint    # ESLint
+```
+
+### CI validation (runs from root)
+```bash
+node scripts/check-v2-openapi.mjs   # Validate OpenAPI contract
+node scripts/check-v2-schema.mjs    # Validate DDL schema
+node scripts/check-v2-monorepo.mjs  # Validate monorepo scaffold
+```
 
 ## Architecture
 

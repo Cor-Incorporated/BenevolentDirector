@@ -1,12 +1,26 @@
-# v1 参照実装
+# BenevolentDirector v1 (参照実装)
 
-このディレクトリは、現行 Next.js 実装を v1 参照実装として退避するための予約領域です。
+v1 の Next.js 実装を参照用に退避したディレクトリです。
 
-現時点では v1 コードの本体はまだ repo root に残っています。  
-v2 の実装を本格着手する前に、bulk move でここへ退避する前提で進めます。
+## 構成
 
-注意:
+- `src/` — Next.js App Router ソースコード
+- `e2e/` — Playwright E2E テスト
+- `public/` — 静的アセット
+- `supabase/` — マイグレーションファイル
+- `scripts/` — v1 用ユーティリティスクリプト
+- `docs/plans/` — v1 スプリント計画
 
-- `.env.local` はここへ移動しない
-- `.env.local` は repo root に残す
-- v1 の役割は「参考実装」であり、v2 の SSOT ではない
+## ローカル実行
+
+```bash
+cd v1
+npm ci
+npm run dev
+```
+
+## 注意事項
+
+- `.env.local` はリポジトリルートに配置（v1/ には移動しない）
+- v2 の SSOT ではない。実装パターンの参考用
+- CI は `v1/` ワーキングディレクトリで自動実行される

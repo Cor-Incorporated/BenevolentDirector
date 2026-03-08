@@ -1,0 +1,53 @@
+"""Configuration loaded from environment variables."""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Config:
+    """Immutable configuration for the intelligence worker.
+
+    Attributes:
+        pubsub_project_id: GCP project ID for Pub/Sub.
+        pubsub_subscription_id: Pub/Sub subscription to consume from.
+        database_url: PostgreSQL connection string.
+    """
+
+    pubsub_project_id: str
+    pubsub_subscription_id: str
+    database_url: str
+
+
+def load_config() -> Config:
+    """Load configuration from environment variables.
+
+    Returns:
+        A frozen Config dataclass.
+
+    Raises:
+        ValueError: If any required environment variable is missing.
+    """
+    missing: list[str] = []
+    env_vars = {
+        "PUBSUB_PROJECT_ID": os.environ.get("PUBSUB_PROJECT_ID"),
+        "PUBSUB_SUBSCRIPTION_ID": os.environ.get("PUBSUB_SUBSCRIPTION_ID"),
+        "DATABASE_URL": os.environ.get("DATABASE_URL"),
+    }
+
+    for name, value in env_vars.items():
+        if not value:
+            missing.append(name)
+
+    if missing:
+        raise ValueError(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
+
+    return Config(
+        pubsub_project_id=env_vars["PUBSUB_PROJECT_ID"],  # type: ignore[arg-type]
+        pubsub_subscription_id=env_vars["PUBSUB_SUBSCRIPTION_ID"],  # type: ignore[arg-type]
+        database_url=env_vars["DATABASE_URL"],  # type: ignore[arg-type]
+    )
