@@ -1,51 +1,49 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
-This repository is a single Next.js App Router project.
-- `src/app`: routes, layouts, and API handlers (`src/app/api/*/route.ts`).
-- `src/components`: reusable UI (`src/components/ui`) and feature components (`chat`, `estimates`, `layout`).
-- `src/lib`: integrations and utilities (`ai`, `supabase`, `utils`).
-- `src/hooks`, `src/stores`, `src/types`: shared hooks, state, and type definitions.
-- `src/test`: test setup; utility tests also live in `src/lib/utils/__tests__`.
-- `e2e`: Playwright end-to-end specs.
-- `public`: static assets.
+## Project Structure
 
-Use the TypeScript path alias `@/*` (for example, `@/components/ui/button`).
+This repository is a monorepo with two tracks.
 
-## Build, Test, and Development Commands
-- `npm run dev`: start local development server at `http://localhost:3000`.
-- `npm run build`: create a production build.
-- `npm run start`: serve the production build.
-- `npm run lint`: run ESLint checks.
-- `npm run type-check`: run strict TypeScript checks without emitting files.
-- `npm run test`: run Vitest once.
-- `npm run test:watch`: run Vitest in watch mode.
-- `npm run test:coverage`: generate coverage reports (text/json/html).
-- `npm run test:e2e`: run Playwright tests in `e2e/`.
+- `v1/`: Next.js reference implementation. Run all legacy app commands from here.
+- `apps/web/`: v2 React web client.
+- `services/control-api/`: v2 Go control plane.
+- `services/intelligence-worker/`: v2 Python async worker.
+- `services/llm-gateway/`: v2 Python LLM routing layer.
+- `packages/contracts/`: OpenAPI and DDL SSOT.
+- `docs/v2/`: ADRs, architecture, roadmap, and testing guardrails.
+- `infra/terraform/`: GCP infrastructure.
 
-## Coding Style & Naming Conventions
-- Language: TypeScript + React function components.
-- Follow existing formatting: 2-space indentation, single quotes, no semicolons.
-- Use kebab-case filenames (`chat-input.tsx`, `rate-limit.ts`).
-- Name test files with `.test.ts(x)` or `.spec.ts(x)`.
-- Keep shared primitives in `src/components/ui`; keep feature-specific code close to its route/feature folder.
+Do not assume root is a Next.js app. The active v2 entrypoints are `apps/`, `services/`, `packages/`, and `docs/v2/`.
 
-## Testing Guidelines
-- Unit/integration tests use Vitest + Testing Library (`jsdom`), configured in `vitest.config.ts` and `src/test/setup.ts`.
-- Match Vitest include pattern: `src/**/*.{test,spec}.{ts,tsx}`.
-- E2E tests use Playwright (`e2e/*.spec.ts`).
-- Before opening a PR, run at minimum: `npm run lint`, `npm run test`, and `npm run type-check`.
+## Commands
 
-## Commit & Pull Request Guidelines
-- Follow Conventional Commit style used in history: `feat: ...`, `chore: ...`, `fix: ...`.
-- Keep commits small and focused by concern.
-- PRs should include:
-  - concise summary of user-visible and technical changes,
-  - linked issue/task when applicable,
-  - verification steps and command output summary,
-  - screenshots for UI changes.
+### v2
 
-## Security & Configuration Tips
-- Copy `.env.example` to `.env.local` for local setup.
-- Never commit API keys or secrets.
-- If environment variables change, document them clearly in the PR description.
+- `mise run dev`: start local infrastructure and print per-service start commands
+- `mise run lint`: lint v2 services
+- `mise run test`: run v2 tests
+- `mise run build`: build v2 services
+- `npm run ci:v2:openapi`: OpenAPI guardrails
+- `npm run ci:v2:schema`: schema / RLS guardrails
+- `npm run ci:v2:monorepo`: monorepo scaffold + hygiene guardrails
+- `npm run ci:v2:adr`: ADR consistency guardrails
+- `npm run ci:v2:env`: local env readiness check
+
+### v1
+
+- `cd v1 && npm run dev`
+- `cd v1 && npm run build`
+- `cd v1 && npm run lint`
+- `cd v1 && npm run test`
+
+## Environment
+
+- Keep `.env.local` at repo root.
+- Do not archive or move `.env.local` into `v1/`.
+- v2 bootstrap expectations are defined in `docs/v2/platform-bootstrap.md`.
+
+## Working Rules
+
+- Treat `packages/contracts/openapi.yaml` and `packages/contracts/initial-schema.sql` as contract-first SSOT.
+- Update `docs/v2` ADRs when changing architectural constraints.
+- Prefer touching v2 code unless the task is explicitly about legacy v1 behavior.

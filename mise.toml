@@ -1,0 +1,85 @@
+[tools]
+node = "20.19.0"
+go = "1.24.0"
+python = "3.12"
+
+[tasks.infra]
+description = "Start infrastructure (PostgreSQL, Redis, Pub/Sub emulator)"
+run = "docker compose up -d"
+
+[tasks.infra-down]
+description = "Stop infrastructure"
+run = "docker compose down"
+
+[tasks.dev]
+description = "Start all services for local development"
+depends = ["infra"]
+run = """
+echo '--- Infrastructure started ---'
+echo 'Start services manually:'
+echo '  control-api:          cd services/control-api && go run ./cmd/server'
+echo '  llm-gateway:          cd services/llm-gateway && uvicorn llm_gateway.main:app --port 8081'
+echo '  intelligence-worker:  cd services/intelligence-worker && python -m intelligence_worker.main'
+echo '  web:                  cd apps/web && npm run dev'
+"""
+
+[tasks.lint]
+description = "Lint all services"
+run = """
+echo '=== Go ===' && (cd services/control-api && go vet ./...) && echo 'OK'
+echo '=== Python (llm-gateway) ===' && (cd services/llm-gateway && ruff check src/ tests/) && echo 'OK'
+echo '=== Python (intelligence-worker) ===' && (cd services/intelligence-worker && ruff check src/ tests/) && echo 'OK'
+echo '=== React ===' && (cd apps/web && npx eslint .) && echo 'OK'
+echo '=== Contracts ===' && node scripts/check-v2-openapi.mjs && echo 'OK'
+"""
+
+[tasks.test]
+description = "Run all tests"
+run = """
+echo '=== Go ===' && (cd services/control-api && go test ./...) && echo 'OK'
+echo '=== Python (llm-gateway) ===' && (cd services/llm-gateway && python -m pytest tests/) && echo 'OK'
+echo '=== Python (intelligence-worker) ===' && (cd services/intelligence-worker && python -m pytest tests/) && echo 'OK'
+echo '=== React ===' && (cd apps/web && npx vitest run) && echo 'OK'
+"""
+
+[tasks.build]
+description = "Build all services"
+run = """
+echo '=== Go ===' && (cd services/control-api && go build ./cmd/server) && echo 'OK'
+echo '=== React ===' && (cd apps/web && npm run build) && echo 'OK'
+"""
+
+[tasks.migrate]
+description = "Apply database migrations (up)"
+run = """
+cd services/control-api && go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest \
+  -path ./migrations \
+  -database 'postgres://bd_admin:bd_local_password@localhost:5432/benevolent_director?sslmode=disable' \
+  up
+"""
+
+[tasks.migrate-down]
+description = "Rollback last database migration"
+run = """
+cd services/control-api && go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest \
+  -path ./migrations \
+  -database 'postgres://bd_admin:bd_local_password@localhost:5432/benevolent_director?sslmode=disable' \
+  down 1
+"""
+
+[tasks.migrate-status]
+description = "Show current migration version"
+run = """
+cd services/control-api && go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest \
+  -path ./migrations \
+  -database 'postgres://bd_admin:bd_local_password@localhost:5432/benevolent_director?sslmode=disable' \
+  version
+"""
+
+[tasks.fmt]
+description = "Format all code"
+run = """
+echo '=== Go ===' && (cd services/control-api && gofmt -w .) && echo 'OK'
+echo '=== Python (llm-gateway) ===' && (cd services/llm-gateway && ruff format src/ tests/) && echo 'OK'
+echo '=== Python (intelligence-worker) ===' && (cd services/intelligence-worker && ruff format src/ tests/) && echo 'OK'
+"""
