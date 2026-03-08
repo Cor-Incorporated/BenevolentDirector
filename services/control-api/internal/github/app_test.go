@@ -74,7 +74,7 @@ func TestGenerateJWT(t *testing.T) {
 			}
 
 			// Parse and verify the token
-			parsed, err := jwt.ParseWithClaims(tokenStr, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
+			parsed, err := jwt.ParseWithClaims(tokenStr, &jwt.RegisteredClaims{}, func(token *jwt.Token) (any, error) {
 				if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 					t.Errorf("unexpected signing method: %v", token.Header["alg"])
 				}
