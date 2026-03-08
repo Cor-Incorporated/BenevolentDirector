@@ -26,27 +26,27 @@ echo '  web:                  cd apps/web && npm run dev'
 [tasks.lint]
 description = "Lint all services"
 run = """
-echo '=== Go ===' && cd services/control-api && go vet ./... && echo 'OK'
-echo '=== Python (llm-gateway) ===' && cd services/llm-gateway && ruff check src/ tests/ && echo 'OK'
-echo '=== Python (intelligence-worker) ===' && cd services/intelligence-worker && ruff check src/ tests/ && echo 'OK'
-echo '=== React ===' && cd apps/web && npx eslint . && echo 'OK'
+echo '=== Go ===' && (cd services/control-api && go vet ./...) && echo 'OK'
+echo '=== Python (llm-gateway) ===' && (cd services/llm-gateway && ruff check src/ tests/) && echo 'OK'
+echo '=== Python (intelligence-worker) ===' && (cd services/intelligence-worker && ruff check src/ tests/) && echo 'OK'
+echo '=== React ===' && (cd apps/web && npx eslint .) && echo 'OK'
 echo '=== Contracts ===' && node scripts/check-v2-openapi.mjs && echo 'OK'
 """
 
 [tasks.test]
 description = "Run all tests"
 run = """
-echo '=== Go ===' && cd services/control-api && go test ./... && echo 'OK'
-echo '=== Python (llm-gateway) ===' && cd services/llm-gateway && python -m pytest tests/ && echo 'OK'
-echo '=== Python (intelligence-worker) ===' && cd services/intelligence-worker && python -m pytest tests/ && echo 'OK'
-echo '=== React ===' && cd apps/web && npx vitest run && echo 'OK'
+echo '=== Go ===' && (cd services/control-api && go test ./...) && echo 'OK'
+echo '=== Python (llm-gateway) ===' && (cd services/llm-gateway && python -m pytest tests/) && echo 'OK'
+echo '=== Python (intelligence-worker) ===' && (cd services/intelligence-worker && python -m pytest tests/) && echo 'OK'
+echo '=== React ===' && (cd apps/web && npx vitest run) && echo 'OK'
 """
 
 [tasks.build]
 description = "Build all services"
 run = """
-echo '=== Go ===' && cd services/control-api && go build ./cmd/server && echo 'OK'
-echo '=== React ===' && cd apps/web && npm run build && echo 'OK'
+echo '=== Go ===' && (cd services/control-api && go build ./cmd/server) && echo 'OK'
+echo '=== React ===' && (cd apps/web && npm run build) && echo 'OK'
 """
 
 [tasks.migrate]
@@ -56,6 +56,7 @@ run = "echo 'Migration tooling not yet configured. See Issue #75.'"
 [tasks.fmt]
 description = "Format all code"
 run = """
-echo '=== Go ===' && cd services/control-api && gofmt -w . && echo 'OK'
-echo '=== Python ===' && cd services/llm-gateway && ruff format src/ tests/ && cd ../intelligence-worker && ruff format src/ tests/ && echo 'OK'
+echo '=== Go ===' && (cd services/control-api && gofmt -w .) && echo 'OK'
+echo '=== Python (llm-gateway) ===' && (cd services/llm-gateway && ruff format src/ tests/) && echo 'OK'
+echo '=== Python (intelligence-worker) ===' && (cd services/intelligence-worker && ruff format src/ tests/) && echo 'OK'
 """

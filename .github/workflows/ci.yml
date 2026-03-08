@@ -323,6 +323,33 @@ jobs:
       - name: Lint intelligence-worker
         run: ruff check services/intelligence-worker/src/ services/intelligence-worker/tests/
 
+  v2-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.19.0'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
   # ─── dependency review ───
 
   dependency-review:
@@ -353,6 +380,7 @@ jobs:
       - v2-monorepo
       - v2-go-build
       - v2-python-lint
+      - v2-web
       - dependency-review
     steps:
       - name: Validate required checks
@@ -368,6 +396,7 @@ jobs:
           V2_MONOREPO: ${{ needs.v2-monorepo.result }}
           V2_GO_BUILD: ${{ needs.v2-go-build.result }}
           V2_PYTHON_LINT: ${{ needs.v2-python-lint.result }}
+          V2_WEB: ${{ needs.v2-web.result }}
           ENABLE_DEPENDENCY_REVIEW: ${{ vars.ENABLE_DEPENDENCY_REVIEW }}
           DEPENDENCY_REVIEW_SUPPORTED: ${{ vars.DEPENDENCY_REVIEW_SUPPORTED }}
           DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency-review.result }}
@@ -386,6 +415,7 @@ jobs:
             V2_MONOREPO
             V2_GO_BUILD
             V2_PYTHON_LINT
+            V2_WEB
           )
 
           for check_name in "${core_checks[@]}"; do
