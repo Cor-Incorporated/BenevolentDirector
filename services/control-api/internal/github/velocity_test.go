@@ -190,7 +190,7 @@ func TestAnalyzeWithMockServer(t *testing.T) {
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(weeks)
+		_ = json.NewEncoder(w).Encode(weeks)
 	})
 
 	// Pulls endpoint
@@ -201,7 +201,7 @@ func TestAnalyzeWithMockServer(t *testing.T) {
 			{MergedAt: nil}, // not merged
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(pulls)
+		_ = json.NewEncoder(w).Encode(pulls)
 	})
 
 	// Issues endpoint
@@ -210,7 +210,7 @@ func TestAnalyzeWithMockServer(t *testing.T) {
 			{CreatedAt: createdAt, ClosedAt: &closedAt},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(issues)
+		_ = json.NewEncoder(w).Encode(issues)
 	})
 
 	// Contributors endpoint
@@ -221,14 +221,14 @@ func TestAnalyzeWithMockServer(t *testing.T) {
 			{Total: 25},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(contributors)
+		_ = json.NewEncoder(w).Encode(contributors)
 	})
 
 	// Languages endpoint
 	mux.HandleFunc("GET /repos/testorg/testrepo/languages", func(w http.ResponseWriter, r *http.Request) {
 		langs := map[string]int64{"Go": 80000, "Shell": 5000}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(langs)
+		_ = json.NewEncoder(w).Encode(langs)
 	})
 
 	srv := httptest.NewServer(mux)
@@ -279,7 +279,7 @@ func TestAnalyzeAPIError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /repos/testorg/testrepo/stats/commit_activity", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"message":"internal error"}`))
+		_, _ = w.Write([]byte(`{"message":"internal error"}`))
 	})
 
 	srv := httptest.NewServer(mux)
@@ -306,7 +306,7 @@ func TestRateLimitHandling(t *testing.T) {
 				w.Header().Set("X-RateLimit-Remaining", "0")
 				w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetTime.Unix(), 10))
 				w.WriteHeader(http.StatusForbidden)
-				w.Write([]byte(`{"message":"API rate limit exceeded"}`))
+				_, _ = w.Write([]byte(`{"message":"API rate limit exceeded"}`))
 				return
 			}
 			// Second call succeeds
@@ -319,24 +319,24 @@ func TestRateLimitHandling(t *testing.T) {
 				}
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(weeks)
+			_ = json.NewEncoder(w).Encode(weeks)
 		})
 		// Add remaining endpoints for full Analyze
 		mux.HandleFunc("GET /repos/testorg/testrepo/pulls", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode([]pullResponse{})
+			_ = json.NewEncoder(w).Encode([]pullResponse{})
 		})
 		mux.HandleFunc("GET /repos/testorg/testrepo/issues", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode([]issueResponse{})
+			_ = json.NewEncoder(w).Encode([]issueResponse{})
 		})
 		mux.HandleFunc("GET /repos/testorg/testrepo/stats/contributors", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode([]contributorResponse{})
+			_ = json.NewEncoder(w).Encode([]contributorResponse{})
 		})
 		mux.HandleFunc("GET /repos/testorg/testrepo/languages", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]int64{})
+			_ = json.NewEncoder(w).Encode(map[string]int64{})
 		})
 
 		srv := httptest.NewServer(mux)
@@ -365,7 +365,7 @@ func TestRateLimitHandling(t *testing.T) {
 			w.Header().Set("X-RateLimit-Remaining", "0")
 			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetTime.Unix(), 10))
 			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte(`{"message":"API rate limit exceeded"}`))
+			_, _ = w.Write([]byte(`{"message":"API rate limit exceeded"}`))
 		})
 
 		srv := httptest.NewServer(mux)
@@ -393,7 +393,7 @@ func TestRateLimitHandling(t *testing.T) {
 			w.Header().Set("X-RateLimit-Remaining", "0")
 			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetTime.Unix(), 10))
 			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte(`{"message":"rate limit"}`))
+			_, _ = w.Write([]byte(`{"message":"rate limit"}`))
 		})
 
 		srv := httptest.NewServer(mux)
@@ -532,24 +532,24 @@ func TestAnalyze202Accepted(t *testing.T) {
 	// Commit activity returns 202 (stats being computed)
 	mux.HandleFunc("GET /repos/testorg/testrepo/stats/commit_activity", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 	mux.HandleFunc("GET /repos/testorg/testrepo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]pullResponse{})
+		_ = json.NewEncoder(w).Encode([]pullResponse{})
 	})
 	mux.HandleFunc("GET /repos/testorg/testrepo/issues", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]issueResponse{})
+		_ = json.NewEncoder(w).Encode([]issueResponse{})
 	})
 	// Contributors also returns 202
 	mux.HandleFunc("GET /repos/testorg/testrepo/stats/contributors", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 	mux.HandleFunc("GET /repos/testorg/testrepo/languages", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]int64{})
+		_ = json.NewEncoder(w).Encode(map[string]int64{})
 	})
 
 	srv := httptest.NewServer(mux)
