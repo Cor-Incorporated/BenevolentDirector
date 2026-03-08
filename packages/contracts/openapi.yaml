@@ -157,6 +157,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
@@ -1673,6 +1675,7 @@ components:
 
     UpdateTenantSettingsRequest:
       type: object
+      additionalProperties: false
       properties:
         analytics_opt_in:
           type: boolean
