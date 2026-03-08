@@ -126,11 +126,7 @@ expectIncludes(
 // Contract-first: schema と OpenAPI の基本整合性
 // ============================================================
 
-// schema にあるテナント系テーブルが OpenAPI のどこかで参照されているか
 const schemaTableNames = [...schema.matchAll(/CREATE TABLE (\w+)/g)].map((m) => m[1])
-const tenantTables = schemaTableNames.filter((t) =>
-  schema.includes(`${t}\n`) && schema.includes(`tenant_id`)
-)
 
 // テーブル数とパス数の比率チェック（大幅な乖離を検出）
 const openapiPaths = [...openapi.matchAll(/^  (\/[^\n]+):$/gm)].map((m) => m[1])
@@ -149,7 +145,7 @@ if (schemaTableNames.length < 15) {
 // Tenant isolation: RLS が全テナントテーブルに適用済み
 // ============================================================
 
-const tablesWithTenantId = [...schema.matchAll(/CREATE TABLE (\w+)[^;]*?tenant_id/gs)].map(
+const tablesWithTenantId = [...schema.matchAll(/CREATE TABLE (\w+)\s*\([^;]*?tenant_id[^;]*?\);/gs)].map(
   (m) => m[1]
 )
 for (const table of tablesWithTenantId) {
