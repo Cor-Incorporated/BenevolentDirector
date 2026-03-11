@@ -1,4 +1,4 @@
-# BenevolentDirector
+# Grift
 
 AI 執事が顧客の曖昧な依頼を完璧な仕様書と見積りに変換し、Linear.app で開発タスクを管理する案件管理システム。
 
