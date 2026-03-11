@@ -26,6 +26,11 @@ func main() {
 	velocityHandler := handler.NewVelocityHandler(nil)
 	mux.HandleFunc("GET /v1/repositories/{repositoryId}/velocity", velocityHandler.GetRepositoryVelocity)
 
+	// Source document routes (P3-01)
+	// TODO(P3): inject real source_document SQL store and GCS uploader.
+	sourceDocumentHandler := handler.NewSourceDocumentHandler(nil, nil)
+	handler.RegisterSourceDocumentRoutes(mux, sourceDocumentHandler)
+
 	// TODO(P1): Replace with AuthWithVerifier(firebaseVerifier) + TenantWithStore(sqlStore)
 	// before staging deploy. Current stubs are for Phase 0 local dev only.
 	var authMW, tenantMW func(http.Handler) http.Handler
@@ -34,8 +39,8 @@ func main() {
 		authMW = middleware.Auth
 		tenantMW = middleware.Tenant
 	} else {
-		authMW = middleware.Auth       // TODO(P1): middleware.AuthWithVerifier(verifier)
-		tenantMW = middleware.Tenant   // TODO(P1): middleware.TenantWithStore(store)
+		authMW = middleware.Auth     // TODO(P1): middleware.AuthWithVerifier(verifier)
+		tenantMW = middleware.Tenant // TODO(P1): middleware.TenantWithStore(store)
 	}
 
 	stack := middleware.Chain(
