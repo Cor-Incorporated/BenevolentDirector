@@ -18,3 +18,16 @@ v2 の LLM anti-corruption layer。
 - `stream=false`（デフォルト）は buffered JSON レスポンスを返す
 - `X-Data-Classification` ヘッダーは `public|internal|confidential|restricted`
   - ヘッダー未指定・無効値は `restricted` として扱う（fail-closed）
+
+## Fallback chain
+
+`/v1/chat/completions` は ADR-0014 準拠の 3 段フォールバックを実装:
+
+1. 同一モデル別ノード (`secondary`)
+2. 軽量モデルダウングレード (`lightweight`)
+3. OpenRouter クラウドエスケープ (`last_resort`)
+
+設定は `packages/config/llm-gateway-fallback-chain.stub.json` で管理し、
+`LLM_GATEWAY_FALLBACK_CHAIN_CONFIG` で差し替え可能。
+
+メトリクスは `GET /metrics/fallbacks` で取得できる。
