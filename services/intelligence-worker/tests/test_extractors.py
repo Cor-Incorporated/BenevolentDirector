@@ -19,9 +19,7 @@ def test_estimation_extractor_extracts_budget_qa_pair() -> None:
         ConversationTurn(
             role="user", content="概算見積を教えてください", turn_number=1
         ),
-        ConversationTurn(
-            role="assistant", content="概算は120万円です", turn_number=2
-        ),
+        ConversationTurn(role="assistant", content="概算は120万円です", turn_number=2),
     ]
 
     pairs = extractor.extract(turns)
