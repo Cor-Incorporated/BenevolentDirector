@@ -23,7 +23,9 @@ class CompletenessResult:
     is_complete: bool
 
 
-def calculate_completeness(domain: str, collected_items: set[str]) -> CompletenessResult:
+def calculate_completeness(
+    domain: str, collected_items: set[str]
+) -> CompletenessResult:
     """Calculate checklist coverage and completion signal for a domain."""
     checklist = DOMAIN_CHECKLISTS.get(domain)
     if checklist is None:

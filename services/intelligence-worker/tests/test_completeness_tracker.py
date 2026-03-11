@@ -17,7 +17,10 @@ def test_calculate_completeness_estimation_incomplete() -> None:
     assert result.completeness == 0.5
     assert result.is_complete is False
     assert result.missing_items == ("budget_range", "deadline")
-    assert build_prompt_feedback(result.missing_items) == "未収集項目: [budget_range, deadline]"
+    assert (
+        build_prompt_feedback(result.missing_items)
+        == "未収集項目: [budget_range, deadline]"
+    )
 
 
 def test_calculate_completeness_estimation_complete_threshold() -> None:
