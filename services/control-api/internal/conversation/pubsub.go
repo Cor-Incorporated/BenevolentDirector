@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"cloud.google.com/go/pubsub"
+	"cloud.google.com/go/pubsub/v2"
 )
 
 // PubSubPublisher publishes events to Google Cloud Pub/Sub.
@@ -29,10 +29,11 @@ func (p *PubSubPublisher) Publish(ctx context.Context, topic string, orderingKey
 		return fmt.Errorf("ordering key is required")
 	}
 
-	t := p.client.Topic(topic)
-	t.EnableMessageOrdering = true
+	publisher := p.client.Publisher(topic)
+	publisher.EnableMessageOrdering = true
+	defer publisher.Stop()
 
-	result := t.Publish(ctx, &pubsub.Message{
+	result := publisher.Publish(ctx, &pubsub.Message{
 		Data:        data,
 		OrderingKey: orderingKey,
 	})

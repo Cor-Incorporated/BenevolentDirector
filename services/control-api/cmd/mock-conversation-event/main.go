@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"cloud.google.com/go/pubsub"
+	"cloud.google.com/go/pubsub/v2"
 	"github.com/google/uuid"
 
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/conversation"
