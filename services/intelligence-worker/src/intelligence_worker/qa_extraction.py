@@ -31,11 +31,20 @@ class QAPair:
 
 
 class LLMClient(Protocol):
-    async def extract_structured(self, *, prompt: str, response_schema: dict[str, Any]) -> str: ...
+    async def extract_structured(
+        self, *, prompt: str, response_schema: dict[str, Any]
+    ) -> str: ...
 
 
 class QAPairRepository(Protocol):
-    async def save_qa_pairs(self, *, tenant_id: str, case_id: str, session_id: str, pairs: list[QAPair]) -> None: ...
+    async def save_qa_pairs(
+        self,
+        *,
+        tenant_id: str,
+        case_id: str,
+        session_id: str,
+        pairs: list[QAPair],
+    ) -> None: ...
 
 
 class DeadLetterPublisher(Protocol):

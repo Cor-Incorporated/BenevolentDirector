@@ -19,7 +19,9 @@ class _FakeLLM:
     response_text: str
     should_fail: bool = False
 
-    async def extract_structured(self, *, prompt: str, response_schema: dict[str, Any]) -> str:
+    async def extract_structured(
+        self, *, prompt: str, response_schema: dict[str, Any]
+    ) -> str:
         assert "qa_pairs" in response_schema.get("properties", {})
         assert "source_domain=" in prompt
         if self.should_fail:
@@ -31,7 +33,14 @@ class _FakeLLM:
 class _FakeRepo:
     saved_pairs: list[QAPair] | None = None
 
-    async def save_qa_pairs(self, *, tenant_id: str, case_id: str, session_id: str, pairs: list[QAPair]) -> None:
+    async def save_qa_pairs(
+        self,
+        *,
+        tenant_id: str,
+        case_id: str,
+        session_id: str,
+        pairs: list[QAPair],
+    ) -> None:
         assert tenant_id and case_id and session_id
         self.saved_pairs = pairs
 
@@ -60,7 +69,9 @@ def test_extract_and_persist_success() -> None:
     )
     repo = _FakeRepo()
     dlq = _FakeDLQ(calls=[])
-    extractor = QAPairExtractor(llm_client=llm, repository=repo, dead_letter_publisher=dlq)
+    extractor = QAPairExtractor(
+        llm_client=llm, repository=repo, dead_letter_publisher=dlq
+    )
 
     pairs = asyncio.run(
         extractor.extract_and_persist(
@@ -82,7 +93,9 @@ def test_extract_and_persist_failure_goes_to_dlq() -> None:
     llm = _FakeLLM(response_text="{}", should_fail=True)
     repo = _FakeRepo()
     dlq = _FakeDLQ(calls=[])
-    extractor = QAPairExtractor(llm_client=llm, repository=repo, dead_letter_publisher=dlq)
+    extractor = QAPairExtractor(
+        llm_client=llm, repository=repo, dead_letter_publisher=dlq
+    )
 
     pairs = asyncio.run(
         extractor.extract_and_persist(
@@ -101,5 +114,8 @@ def test_extract_and_persist_failure_goes_to_dlq() -> None:
 
 
 def test_parse_structured_output() -> None:
-    parsed = parse_structured_output('{"qa_pairs":[{"question_text":"q","answer_text":"a","turn_range":[1,2],"confidence":1.0,"source_domain":"estimation"}]}')
+    parsed = parse_structured_output(
+        '{"qa_pairs":[{"question_text":"q","answer_text":"a","turn_range":[1,2],'
+        '"confidence":1.0,"source_domain":"estimation"}]}'
+    )
     assert "qa_pairs" in parsed
