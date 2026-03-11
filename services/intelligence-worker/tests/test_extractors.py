@@ -16,8 +16,12 @@ from intelligence_worker.extractors import (
 def test_estimation_extractor_extracts_budget_qa_pair() -> None:
     extractor = EstimationExtractor()
     turns = [
-        ConversationTurn(role="user", content="概算見積を教えてください", turn_number=1),
-        ConversationTurn(role="assistant", content="概算は120万円です", turn_number=2),
+        ConversationTurn(
+            role="user", content="概算見積を教えてください", turn_number=1
+        ),
+        ConversationTurn(
+            role="assistant", content="概算は120万円です", turn_number=2
+        ),
     ]
 
     pairs = extractor.extract(turns)
@@ -36,7 +40,9 @@ def test_estimation_extractor_skips_non_estimation_questions() -> None:
     extractor = EstimationExtractor()
     turns = [
         ConversationTurn(role="user", content="納期はいつですか？", turn_number=1),
-        ConversationTurn(role="assistant", content="来月を予定しています", turn_number=2),
+        ConversationTurn(
+            role="assistant", content="来月を予定しています", turn_number=2
+        ),
     ]
 
     assert extractor.extract(turns) == []
