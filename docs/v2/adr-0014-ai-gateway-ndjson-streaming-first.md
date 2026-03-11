@@ -50,7 +50,7 @@ SSE ではなく NDJSON を選択する理由:
 
 ### 2. OpenAI 互換 API を内部標準とする
 
-llm-gateway は独自プロトコルを持たず、OpenAI 互換 API をそのまま内部標準にする。
+llm-gateway は独自プロトコルを持たず、OpenAI 互換 API を内部標準にする。ただし「内部標準」とは **上流**（llm-gateway ↔ vLLM/TGI）のインターフェースを指す。上流では OpenAI 互換 API をそのまま使用し、`stream=false` 時は単一 JSON、`stream=true` 時は SSE (`data:` プレフィックス) で通信する。**下流**（llm-gateway → control-api 等のコンシューマー）では、セクション 1 の NDJSON Streaming-First 原則に従い、ストリーミング時は SSE → NDJSON 変換を llm-gateway が行い、非ストリーミング時は通常の JSON レスポンスを返す。
 
 ```text
 POST /v1/chat/completions    ← 会話・生成（ストリーミング対応）
