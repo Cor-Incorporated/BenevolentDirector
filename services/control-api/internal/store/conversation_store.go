@@ -143,24 +143,12 @@ func (s *SQLConversationStore) EnsureCaseExists(ctx context.Context, tenantID, c
 	return nil
 }
 
-// dbExecutor abstracts *sql.DB and *sql.Tx for query execution.
-type dbExecutor interface {
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
-
 // executorFromContext returns the RLS-scoped transaction from context, or falls back to db.
 func executorFromContext(ctx context.Context, db *sql.DB) dbExecutor {
 	if tx := middleware.TxFromContext(ctx); tx != nil {
 		return tx
 	}
 	return db
-}
-
-// rowScanner abstracts *sql.Row and *sql.Rows for scanning.
-type rowScanner interface {
-	Scan(dest ...any) error
 }
 
 func scanConversationTurn(scanner rowScanner) (*ConversationTurn, error) {
