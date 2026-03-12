@@ -28,8 +28,8 @@ type queryExecer interface {
 }
 
 func (s *SQLStore) queryer(ctx context.Context) queryExecer {
-	if conn := middleware.ConnFromContext(ctx); conn != nil {
-		return conn
+	if tx := middleware.TxFromContext(ctx); tx != nil {
+		return tx
 	}
 	return s.DB
 }
