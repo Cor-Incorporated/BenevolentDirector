@@ -168,6 +168,95 @@ export interface paths {
       }
     }
   }
+  '/v1/cases/{caseId}/conversations': {
+    get: {
+      parameters: {
+        header: { 'X-Tenant-ID': string }
+        path: { caseId: string }
+        query?: { limit?: number; offset?: number }
+      }
+      responses: {
+        200: {
+          content: {
+            'application/json': {
+              data?: components['schemas']['ConversationTurn'][]
+              total?: number
+            }
+          }
+        }
+        400: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        401: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        403: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        404: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        429: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+      }
+    }
+    post: {
+      parameters: {
+        header: { 'X-Tenant-ID': string }
+        path: { caseId: string }
+      }
+      requestBody: {
+        content: {
+          'application/json': { content: string }
+        }
+      }
+      responses: {
+        200: {
+          content: {
+            'application/json': {
+              data?: components['schemas']['ConversationTurn']
+            }
+          }
+        }
+        400: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        401: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        403: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        404: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        429: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+      }
+    }
+  }
   '/v1/cases/{caseId}': {
     get: {
       parameters: {
