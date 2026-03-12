@@ -115,7 +115,7 @@ func TestRequirementArtifactHandler_GetLatestByCaseID(t *testing.T) {
 				if captured != nil {
 					req = captured
 					// Re-set URL for mux routing.
-					req.URL = req.URL
+					req.URL.Path = "/v1/cases/" + tt.caseID + "/requirement-artifact"
 					req.RequestURI = "/v1/cases/" + tt.caseID + "/requirement-artifact"
 				}
 			}
