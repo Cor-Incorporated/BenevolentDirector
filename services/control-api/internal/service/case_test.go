@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"testing"
 	"time"
@@ -16,6 +17,8 @@ type mockCaseStore struct {
 	createFn func(ctx context.Context, c *domain.Case) (*domain.Case, error)
 	listFn   func(ctx context.Context, tenantID uuid.UUID, statusFilter, typeFilter string, limit, offset int) ([]domain.Case, int, error)
 	getFn    func(ctx context.Context, tenantID, caseID uuid.UUID) (*domain.Case, error)
+	updateFn func(ctx context.Context, tenantID, caseID uuid.UUID, fields store.UpdateCaseFields) (*domain.Case, error)
+	deleteFn func(ctx context.Context, tenantID, caseID uuid.UUID) error
 }
 
 var _ store.CaseStore = (*mockCaseStore)(nil)
@@ -42,6 +45,28 @@ func (m *mockCaseStore) Get(ctx context.Context, tenantID, caseID uuid.UUID) (*d
 		return m.getFn(ctx, tenantID, caseID)
 	}
 	return nil, nil
+}
+
+func (m *mockCaseStore) Update(ctx context.Context, tenantID, caseID uuid.UUID, fields store.UpdateCaseFields) (*domain.Case, error) {
+	if m.updateFn != nil {
+		return m.updateFn(ctx, tenantID, caseID, fields)
+	}
+	return &domain.Case{
+		ID:        caseID,
+		TenantID:  tenantID,
+		Title:     "updated",
+		Type:      domain.CaseTypeNewProject,
+		Status:    domain.CaseStatusDraft,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}, nil
+}
+
+func (m *mockCaseStore) Delete(ctx context.Context, tenantID, caseID uuid.UUID) error {
+	if m.deleteFn != nil {
+		return m.deleteFn(ctx, tenantID, caseID)
+	}
+	return nil
 }
 
 func TestCaseService_Create(t *testing.T) {
@@ -243,4 +268,149 @@ func TestCaseService_Get(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCaseService_Update(t *testing.T) {
+	tenantID := uuid.New()
+	caseID := uuid.New()
+	now := time.Now()
+
+	validTitle := "Updated title"
+	invalidType := "bad_type"
+	validType := "bug_report"
+	invalidStatus := "wrong"
+	validStatus := "analyzing"
+	invalidPriority := "super"
+	validPriority := "high"
+
+	tests := []struct {
+		name    string
+		input   UpdateInput
+		storeFn func(ctx context.Context, tid, cid uuid.UUID, f store.UpdateCaseFields) (*domain.Case, error)
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid title update",
+			input: UpdateInput{
+				Title: &validTitle,
+			},
+			storeFn: func(_ context.Context, _, _ uuid.UUID, _ store.UpdateCaseFields) (*domain.Case, error) {
+				return &domain.Case{
+					ID: caseID, TenantID: tenantID, Title: validTitle,
+					Type: domain.CaseTypeNewProject, Status: domain.CaseStatusDraft,
+					CreatedAt: now, UpdatedAt: now,
+				}, nil
+			},
+		},
+		{
+			name:  "valid multi-field update",
+			input: UpdateInput{Title: &validTitle, Type: &validType, Status: &validStatus, Priority: &validPriority},
+		},
+		{
+			name:    "invalid type",
+			input:   UpdateInput{Type: &invalidType},
+			wantErr: true,
+			errMsg:  "invalid case type",
+		},
+		{
+			name:    "invalid status",
+			input:   UpdateInput{Status: &invalidStatus},
+			wantErr: true,
+			errMsg:  "invalid case status",
+		},
+		{
+			name:    "invalid priority",
+			input:   UpdateInput{Priority: &invalidPriority},
+			wantErr: true,
+			errMsg:  "invalid case priority",
+		},
+		{
+			name:  "not found",
+			input: UpdateInput{Title: &validTitle},
+			storeFn: func(_ context.Context, _, _ uuid.UUID, _ store.UpdateCaseFields) (*domain.Case, error) {
+				return nil, sql.ErrNoRows
+			},
+			wantErr: true,
+			errMsg:  "not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewCaseService(&mockCaseStore{updateFn: tt.storeFn})
+
+			got, err := svc.Update(context.Background(), tenantID, caseID, tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Update() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil {
+				if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+					t.Errorf("Update() error = %v, want containing %q", err, tt.errMsg)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatal("Update() returned nil, want non-nil")
+			}
+		})
+	}
+}
+
+func TestCaseService_Delete(t *testing.T) {
+	tenantID := uuid.New()
+	caseID := uuid.New()
+
+	tests := []struct {
+		name    string
+		storeFn func(ctx context.Context, tid, cid uuid.UUID) error
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "success",
+		},
+		{
+			name: "not found",
+			storeFn: func(_ context.Context, _, _ uuid.UUID) error {
+				return sql.ErrNoRows
+			},
+			wantErr: true,
+			errMsg:  "not found",
+		},
+		{
+			name: "store error",
+			storeFn: func(_ context.Context, _, _ uuid.UUID) error {
+				return fmt.Errorf("connection refused")
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewCaseService(&mockCaseStore{deleteFn: tt.storeFn})
+
+			err := svc.Delete(context.Background(), tenantID, caseID)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Delete() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+				t.Errorf("Delete() error = %v, want containing %q", err, tt.errMsg)
+			}
+		})
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && searchSubstring(s, substr)
+}
+
+func searchSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }

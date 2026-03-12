@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/domain"
@@ -25,6 +26,8 @@ func RegisterCaseRoutes(mux *http.ServeMux, h *CaseHandler) {
 	mux.HandleFunc("GET /v1/cases", h.ListCases)
 	mux.HandleFunc("POST /v1/cases", h.CreateCase)
 	mux.HandleFunc("GET /v1/cases/{caseId}", h.GetCase)
+	mux.HandleFunc("PATCH /v1/cases/{caseId}", h.UpdateCase)
+	mux.HandleFunc("DELETE /v1/cases/{caseId}", h.DeleteCase)
 }
 
 // CreateCase handles POST /v1/cases.
@@ -106,6 +109,73 @@ func (h *CaseHandler) GetCase(w http.ResponseWriter, r *http.Request) {
 			Estimates:     []any{},
 		},
 	})
+}
+
+// UpdateCase handles PATCH /v1/cases/{caseId}.
+func (h *CaseHandler) UpdateCase(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := parseTenantUUID(w, r)
+	if !ok {
+		return
+	}
+	caseID, ok := parseCaseUUID(w, r)
+	if !ok {
+		return
+	}
+
+	var req updateCaseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	result, err := h.svc.Update(r.Context(), tenantID, caseID, service.UpdateInput{
+		Title:    req.Title,
+		Type:     req.Type,
+		Status:   req.Status,
+		Priority: req.Priority,
+	})
+	if err != nil {
+		if errors.Is(err, service.ErrNotFound) {
+			writeJSONError(w, "case not found", http.StatusNotFound)
+			return
+		}
+		writeJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"data": result})
+}
+
+// DeleteCase handles DELETE /v1/cases/{caseId}.
+func (h *CaseHandler) DeleteCase(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := parseTenantUUID(w, r)
+	if !ok {
+		return
+	}
+	caseID, ok := parseCaseUUID(w, r)
+	if !ok {
+		return
+	}
+
+	err := h.svc.Delete(r.Context(), tenantID, caseID)
+	if err != nil {
+		if errors.Is(err, service.ErrNotFound) {
+			writeJSONError(w, "case not found", http.StatusNotFound)
+			return
+		}
+		writeJSONError(w, "failed to delete case", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// updateCaseRequest is the JSON body for PATCH /v1/cases/{caseId}.
+type updateCaseRequest struct {
+	Title    *string `json:"title"`
+	Type     *string `json:"type"`
+	Status   *string `json:"status"`
+	Priority *string `json:"priority"`
 }
 
 // createCaseRequest is the JSON body for POST /v1/cases.
