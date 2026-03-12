@@ -43,7 +43,7 @@ class LLMProvider(Protocol):
         timeout: float = 30.0,
     ) -> ProviderResponse: ...
 
-    async def stream(
+    def stream(
         self,
         messages: list[dict[str, str]],
         *,

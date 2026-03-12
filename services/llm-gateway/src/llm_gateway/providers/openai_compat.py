@@ -97,25 +97,25 @@ class OpenAICompatProvider:
                 headers=self._headers(),
             ) as resp,
         ):
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data: "):
-                        continue
-                    data_str = line[len("data: "):]
-                    if data_str.strip() == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(data_str)
-                    except json.JSONDecodeError:
-                        logger.warning(
-                            "skipping malformed SSE chunk: %s",
-                            data_str[:80],
-                        )
-                        continue
-                    delta = chunk.get("choices", [{}])[0].get("delta", {})
-                    content = delta.get("content", "")
-                    finish = chunk.get("choices", [{}])[0].get("finish_reason")
-                    if content:
-                        yield StreamChunk(content=content, finish_reason=finish)
-                    elif finish:
-                        yield StreamChunk(content="", finish_reason=finish)
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[len("data: ") :]
+                if data_str.strip() == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data_str)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "skipping malformed SSE chunk: %s",
+                        data_str[:80],
+                    )
+                    continue
+                delta = chunk.get("choices", [{}])[0].get("delta", {})
+                content = delta.get("content", "")
+                finish = chunk.get("choices", [{}])[0].get("finish_reason")
+                if content:
+                    yield StreamChunk(content=content, finish_reason=finish)
+                elif finish:
+                    yield StreamChunk(content="", finish_reason=finish)
