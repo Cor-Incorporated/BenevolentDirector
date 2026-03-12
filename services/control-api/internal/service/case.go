@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -84,4 +86,76 @@ func (s *CaseService) Get(ctx context.Context, tenantID, caseID uuid.UUID) (*dom
 	}
 
 	return c, nil
+}
+
+// UpdateInput holds the optional fields for patching a case.
+type UpdateInput struct {
+	Title    *string
+	Type     *string
+	Status   *string
+	Priority *string
+}
+
+// ErrNotFound indicates the requested resource does not exist.
+var ErrNotFound = errors.New("not found")
+
+// Update validates the non-nil fields and patches the case.
+func (s *CaseService) Update(ctx context.Context, tenantID, caseID uuid.UUID, in UpdateInput) (*domain.Case, error) {
+	var fields store.UpdateCaseFields
+
+	if in.Title != nil {
+		title := strings.TrimSpace(*in.Title)
+		if title == "" {
+			return nil, fmt.Errorf("title must not be empty")
+		}
+		if len(title) > 200 {
+			return nil, fmt.Errorf("title must be 200 characters or fewer")
+		}
+		fields.Title = &title
+	}
+	if in.Type != nil {
+		ct := domain.CaseType(*in.Type)
+		if !ct.IsValid() {
+			return nil, fmt.Errorf("invalid case type: %s", *in.Type)
+		}
+		fields.Type = &ct
+	}
+	if in.Status != nil {
+		cs := domain.CaseStatus(*in.Status)
+		if !cs.IsValid() {
+			return nil, fmt.Errorf("invalid case status: %s", *in.Status)
+		}
+		fields.Status = &cs
+	}
+	if in.Priority != nil {
+		cp := domain.CasePriority(*in.Priority)
+		if !cp.IsValid() {
+			return nil, fmt.Errorf("invalid case priority: %s", *in.Priority)
+		}
+		fields.Priority = &cp
+	}
+
+	result, err := s.store.Update(ctx, tenantID, caseID, fields)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("updating case: %w", err)
+	}
+
+	return result, nil
+}
+
+// Delete removes a case by ID scoped to a tenant.
+// Returns ErrNotFound if the case does not exist.
+func (s *CaseService) Delete(ctx context.Context, tenantID, caseID uuid.UUID) error {
+	err := s.store.Delete(ctx, tenantID, caseID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("deleting case: %w", err)
+	}
+
+	return nil
 }

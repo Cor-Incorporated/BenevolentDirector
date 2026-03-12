@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -28,6 +29,11 @@ type mockCaseStore struct {
 
 	getResult *domain.Case
 	getErr    error
+
+	updateResult *domain.Case
+	updateErr    error
+
+	deleteErr error
 }
 
 var _ store.CaseStore = (*mockCaseStore)(nil)
@@ -52,6 +58,20 @@ func (m *mockCaseStore) List(_ context.Context, _ uuid.UUID, _, _ string, _, _ i
 
 func (m *mockCaseStore) Get(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*domain.Case, error) {
 	return m.getResult, m.getErr
+}
+
+func (m *mockCaseStore) Update(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ store.UpdateCaseFields) (*domain.Case, error) {
+	if m.updateErr != nil {
+		return nil, m.updateErr
+	}
+	if m.updateResult != nil {
+		return m.updateResult, nil
+	}
+	return nil, nil
+}
+
+func (m *mockCaseStore) Delete(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
+	return m.deleteErr
 }
 
 func newTestCaseHandler(s store.CaseStore) *CaseHandler {
@@ -264,5 +284,132 @@ func TestCaseHandlerGetCase_InvalidID(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCaseHandlerUpdateCase(t *testing.T) {
+	tenantID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	caseID := uuid.New()
+	now := time.Now()
+
+	s := &mockCaseStore{
+		updateResult: &domain.Case{
+			ID:        caseID,
+			TenantID:  tenantID,
+			Title:     "Updated title",
+			Type:      domain.CaseTypeNewProject,
+			Status:    domain.CaseStatusDraft,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}
+
+	h := newTestCaseHandler(s)
+	mux := http.NewServeMux()
+	RegisterCaseRoutes(mux, h)
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/cases/"+caseID.String(),
+		bytes.NewBufferString(`{"title":"Updated title"}`))
+	req.Header.Set("X-Tenant-ID", tenantID.String())
+	rec := httptest.NewRecorder()
+
+	middleware.Tenant(mux).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var body map[string]map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if body["data"]["title"] != "Updated title" {
+		t.Fatalf("title = %v, want %q", body["data"]["title"], "Updated title")
+	}
+}
+
+func TestCaseHandlerUpdateCase_NotFound(t *testing.T) {
+	tenantID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	caseID := uuid.New()
+
+	s := &mockCaseStore{
+		updateErr: sql.ErrNoRows,
+	}
+
+	h := newTestCaseHandler(s)
+	mux := http.NewServeMux()
+	RegisterCaseRoutes(mux, h)
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/cases/"+caseID.String(),
+		bytes.NewBufferString(`{"title":"Updated"}`))
+	req.Header.Set("X-Tenant-ID", tenantID)
+	rec := httptest.NewRecorder()
+
+	middleware.Tenant(mux).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+}
+
+func TestCaseHandlerUpdateCase_InvalidType(t *testing.T) {
+	tenantID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	caseID := uuid.New()
+
+	h := newTestCaseHandler(&mockCaseStore{})
+	mux := http.NewServeMux()
+	RegisterCaseRoutes(mux, h)
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/cases/"+caseID.String(),
+		bytes.NewBufferString(`{"type":"invalid_type"}`))
+	req.Header.Set("X-Tenant-ID", tenantID)
+	rec := httptest.NewRecorder()
+
+	middleware.Tenant(mux).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+func TestCaseHandlerDeleteCase(t *testing.T) {
+	tenantID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	caseID := uuid.New()
+
+	h := newTestCaseHandler(&mockCaseStore{})
+	mux := http.NewServeMux()
+	RegisterCaseRoutes(mux, h)
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/cases/"+caseID.String(), nil)
+	req.Header.Set("X-Tenant-ID", tenantID)
+	rec := httptest.NewRecorder()
+
+	middleware.Tenant(mux).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+}
+
+func TestCaseHandlerDeleteCase_NotFound(t *testing.T) {
+	tenantID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	caseID := uuid.New()
+
+	s := &mockCaseStore{
+		deleteErr: sql.ErrNoRows,
+	}
+
+	h := newTestCaseHandler(s)
+	mux := http.NewServeMux()
+	RegisterCaseRoutes(mux, h)
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/cases/"+caseID.String(), nil)
+	req.Header.Set("X-Tenant-ID", tenantID)
+	rec := httptest.NewRecorder()
+
+	middleware.Tenant(mux).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusNotFound, rec.Body.String())
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/domain"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/middleware"
@@ -18,6 +19,21 @@ type CaseStore interface {
 	List(ctx context.Context, tenantID uuid.UUID, statusFilter, typeFilter string, limit, offset int) ([]domain.Case, int, error)
 	// Get returns a single case by ID scoped to a tenant. Returns nil if not found.
 	Get(ctx context.Context, tenantID, caseID uuid.UUID) (*domain.Case, error)
+	// Update patches the specified fields on a case and returns the updated row.
+	// Returns nil, sql.ErrNoRows if the case does not exist.
+	Update(ctx context.Context, tenantID, caseID uuid.UUID, fields UpdateCaseFields) (*domain.Case, error)
+	// Delete removes a case by ID scoped to a tenant.
+	// Returns sql.ErrNoRows if the case does not exist.
+	Delete(ctx context.Context, tenantID, caseID uuid.UUID) error
+}
+
+// UpdateCaseFields holds the optional fields that may be patched on a case.
+// Only non-nil fields are applied.
+type UpdateCaseFields struct {
+	Title    *string
+	Type     *domain.CaseType
+	Status   *domain.CaseStatus
+	Priority *domain.CasePriority
 }
 
 // dbExecutor abstracts *sql.DB and *sql.Tx for query execution.
@@ -173,4 +189,82 @@ func scanCase(scanner rowScanner) (*domain.Case, error) {
 		record.Priority = &value
 	}
 	return &record, nil
+}
+
+// Update patches the specified non-nil fields on a case and returns the updated row.
+// Returns nil, sql.ErrNoRows when no matching row exists.
+func (s *SQLCaseStore) Update(ctx context.Context, tenantID, caseID uuid.UUID, fields UpdateCaseFields) (*domain.Case, error) {
+	exec := s.executor(ctx)
+
+	// tenant_id and id are always the first two parameters.
+	args := []any{tenantID, caseID}
+	var setClauses []string
+
+	if fields.Title != nil {
+		args = append(args, *fields.Title)
+		setClauses = append(setClauses, fmt.Sprintf("title = $%d", len(args)))
+	}
+	if fields.Type != nil {
+		args = append(args, string(*fields.Type))
+		setClauses = append(setClauses, fmt.Sprintf("type = $%d", len(args)))
+	}
+	if fields.Status != nil {
+		args = append(args, string(*fields.Status))
+		setClauses = append(setClauses, fmt.Sprintf("status = $%d", len(args)))
+	}
+	if fields.Priority != nil {
+		args = append(args, string(*fields.Priority))
+		setClauses = append(setClauses, fmt.Sprintf("priority = $%d", len(args)))
+	}
+
+	if len(setClauses) == 0 {
+		// Nothing to update; just return the current row.
+		return s.Get(ctx, tenantID, caseID)
+	}
+
+	// Always bump updated_at.
+	setClauses = append(setClauses, "updated_at = NOW()")
+
+	query := fmt.Sprintf(
+		`UPDATE cases SET %s WHERE tenant_id = $1 AND id = $2
+		RETURNING id, tenant_id, title, type, status, priority, business_line,
+			existing_system_url, spec_markdown, contact_name, contact_email,
+			company_name, created_by_uid, created_at, updated_at`,
+		strings.Join(setClauses, ", "),
+	)
+
+	row := exec.QueryRowContext(ctx, query, args...)
+	record, err := scanCase(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, sql.ErrNoRows
+		}
+		return nil, fmt.Errorf("update case: %w", err)
+	}
+
+	return record, nil
+}
+
+// Delete removes a case by tenant and case ID.
+// Returns sql.ErrNoRows when no matching row exists.
+func (s *SQLCaseStore) Delete(ctx context.Context, tenantID, caseID uuid.UUID) error {
+	exec := s.executor(ctx)
+
+	result, err := exec.ExecContext(ctx,
+		`DELETE FROM cases WHERE tenant_id = $1 AND id = $2`,
+		tenantID, caseID,
+	)
+	if err != nil {
+		return fmt.Errorf("delete case: %w", err)
+	}
+
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete case rows affected: %w", err)
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
 }
