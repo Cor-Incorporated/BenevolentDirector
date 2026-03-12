@@ -70,6 +70,9 @@ func main() {
 		authMW = middleware.Auth
 		tenantMW = middleware.TenantWithStore(&middleware.SQLTenantStore{DB: db})
 	} else {
+		// TODO(wave1): wire AuthWithVerifier(firebaseVerifier) here.
+		// Wave 0 uses stub auth for local development only.
+		// DO NOT deploy to production without real auth.
 		authMW = middleware.Auth
 		tenantMW = middleware.TenantWithStore(&middleware.SQLTenantStore{DB: db})
 	}

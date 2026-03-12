@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import signal
 import sys
@@ -15,6 +14,7 @@ import psycopg2
 import structlog
 from google.cloud import pubsub_v1
 from psycopg2 import errors as psycopg_errors
+from psycopg2 import pool as psycopg_pool
 
 from intelligence_worker.completeness_tracker import calculate_completeness
 from intelligence_worker.config import load_config
@@ -49,11 +49,11 @@ class GatewayLLMClient:
     def __init__(self, base_url: str) -> None:
         self._url = base_url.rstrip("/") + "/v1/chat/completions"
 
-    async def extract_structured(
+    def extract_structured(
         self, *, prompt: str, response_schema: dict[str, object]
     ) -> str:
         del response_schema
-        return await asyncio.to_thread(self._request, prompt)
+        return self._request(prompt)
 
     def _request(self, prompt: str) -> str:
         payload = json.dumps(
@@ -92,17 +92,17 @@ class GatewayLLMClient:
 class LoggingDeadLetterPublisher:
     """DLQ placeholder until dedicated topic wiring is added."""
 
-    async def publish(self, *, reason: str, payload: dict[str, object]) -> None:
+    def publish(self, *, reason: str, payload: dict[str, object]) -> None:
         logger.warning("qa_extraction_dlq", reason=reason, payload=payload)
 
 
 class PostgresQAPairRepository:
     """Persist extracted QA pairs with derived quality scores."""
 
-    def __init__(self, database_url: str) -> None:
-        self._database_url = database_url
+    def __init__(self, pool: psycopg_pool.SimpleConnectionPool) -> None:
+        self._pool = pool
 
-    async def save_qa_pairs(
+    def save_qa_pairs(
         self,
         *,
         tenant_id: str,
@@ -112,8 +112,7 @@ class PostgresQAPairRepository:
     ) -> None:
         if not pairs:
             return
-        await asyncio.to_thread(
-            self._save_sync,
+        self._save_sync(
             tenant_id,
             case_id,
             session_id,
@@ -128,11 +127,10 @@ class PostgresQAPairRepository:
         pairs: list[QAPair],
     ) -> None:
         del case_id
+        conn: psycopg2.extensions.connection | None = None
         try:
-            with (
-                psycopg2.connect(self._database_url) as conn,
-                conn.cursor() as cur,
-            ):
+            conn = self._pool.getconn()
+            with conn, conn.cursor() as cur:
                 for pair in pairs:
                     completeness = calculate_completeness(pair.source_domain, set())
                     score = score_from_llm_output(
@@ -177,42 +175,47 @@ class PostgresQAPairRepository:
                     )
         except psycopg_errors.UndefinedTable:
             logger.warning("qa_pairs_table_missing_skip_persist")
+        finally:
+            if conn is not None:
+                self._pool.putconn(conn)
 
 
 class ConversationTurnRepository:
     """Load conversation turns for extraction."""
 
-    def __init__(self, database_url: str) -> None:
-        self._database_url = database_url
+    def __init__(self, pool: psycopg_pool.SimpleConnectionPool) -> None:
+        self._pool = pool
 
-    async def load_turns(
-        self, *, tenant_id: str, case_id: str
-    ) -> list[ConversationTurn]:
-        return await asyncio.to_thread(self._load_sync, tenant_id, case_id)
+    def load_turns(self, *, tenant_id: str, case_id: str) -> list[ConversationTurn]:
+        return self._load_sync(tenant_id, case_id)
 
     def _load_sync(self, tenant_id: str, case_id: str) -> list[ConversationTurn]:
-        with psycopg2.connect(self._database_url) as conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT role, content
-                FROM conversation_turns
-                WHERE tenant_id = %s AND case_id = %s
-                ORDER BY created_at ASC, id ASC
-                """,
-                (tenant_id, case_id),
-            )
-            return [
-                ConversationTurn(
-                    role=role,
-                    content=content,
-                    turn_number=index,
+        conn = self._pool.getconn()
+        try:
+            with conn, conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT role, content
+                    FROM conversation_turns
+                    WHERE tenant_id = %s AND case_id = %s
+                    ORDER BY created_at ASC, id ASC
+                    """,
+                    (tenant_id, case_id),
                 )
-                for index, (role, content) in enumerate(cur.fetchall(), start=1)
-            ]
+                return [
+                    ConversationTurn(
+                        role=role,
+                        content=content,
+                        turn_number=index,
+                    )
+                    for index, (role, content) in enumerate(cur.fetchall(), start=1)
+                ]
+        finally:
+            self._pool.putconn(conn)
 
 
 class TurnCompletedHandler:
-    """Sync Pub/Sub callback that bridges into the async QA pipeline."""
+    """Sync Pub/Sub callback for the QA pipeline."""
 
     def __init__(
         self,
@@ -224,9 +227,9 @@ class TurnCompletedHandler:
         self._extractor = extractor
 
     def __call__(self, payload: dict[str, object]) -> None:
-        asyncio.run(self._handle(payload))
+        self._handle(payload)
 
-    async def _handle(self, payload: dict[str, object]) -> None:
+    def _handle(self, payload: dict[str, object]) -> None:
         tenant_id = str(payload.get("tenant_id") or "")
         envelope_payload = payload.get("payload")
         if not isinstance(envelope_payload, dict):
@@ -245,7 +248,7 @@ class TurnCompletedHandler:
             )
             return
 
-        turns = await self._conversation_repo.load_turns(
+        turns = self._conversation_repo.load_turns(
             tenant_id=tenant_id,
             case_id=session_id,
         )
@@ -253,7 +256,7 @@ class TurnCompletedHandler:
             logger.info("turn_completed_no_turns", session_id=session_id)
             return
 
-        await self._extractor.extract_and_persist(
+        self._extractor.extract_and_persist(
             tenant_id=tenant_id,
             case_id=session_id,
             session_id=session_id,
@@ -265,9 +268,10 @@ class TurnCompletedHandler:
 def run() -> None:
     """Start the worker runtime and block until shutdown."""
     config = load_config()
+    pool = psycopg_pool.SimpleConnectionPool(1, 5, dsn=config.database_url)
     llm_client = GatewayLLMClient(config.llm_gateway_url)
-    repository = PostgresQAPairRepository(config.database_url)
-    conversation_repo = ConversationTurnRepository(config.database_url)
+    repository = PostgresQAPairRepository(pool)
+    conversation_repo = ConversationTurnRepository(pool)
     extractor = QAPairExtractor(
         llm_client=llm_client,
         repository=repository,
@@ -296,6 +300,7 @@ def run() -> None:
     finally:
         future.cancel()
         subscriber_client.close()
+        pool.closeall()
 
 
 def main() -> NoReturn:
