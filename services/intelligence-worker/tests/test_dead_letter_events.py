@@ -102,7 +102,7 @@ def test_store_record_failure_inserts_new_row() -> None:
     assert mock_cursor.execute.call_count == 1
     insert_call = mock_cursor.execute.call_args_list[0]
     assert "ON CONFLICT" in insert_call.args[0]
-    assert "RETURNING retry_count" in insert_call.args[0]
+    assert "DO UPDATE SET" in insert_call.args[0]
     assert insert_call.args[1][0] == "t1"
     assert insert_call.args[1][1] == "e1"
     assert insert_call.args[1][2] == "conversation.turn.completed"
