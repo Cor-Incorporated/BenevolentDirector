@@ -120,14 +120,6 @@ func errWithStatus(msg string, status int) error {
 	return statusError{status: status, msg: msg}
 }
 
-// httpStatusForError extracts the HTTP status from a statusError, defaulting to 500.
-func httpStatusForError(err error) int {
-	if typed, ok := err.(statusError); ok {
-		return typed.status
-	}
-	return http.StatusInternalServerError
-}
-
 // writeStreamError writes an NDJSON error frame for streaming responses.
 func writeStreamError(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "application/x-ndjson")
