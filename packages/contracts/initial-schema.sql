@@ -149,8 +149,11 @@ CREATE TABLE conversation_turns (
   case_id     UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
   role        TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
   content     TEXT NOT NULL,
-  source_domain      TEXT NOT NULL DEFAULT 'unknown',
-  training_eligible  BOOLEAN NOT NULL DEFAULT false,
+  source_domain          TEXT NOT NULL DEFAULT 'unknown',
+  training_eligible      BOOLEAN NOT NULL DEFAULT false,
+  model_used             TEXT,
+  system_prompt_version  TEXT,
+  fallback_used          BOOLEAN NOT NULL DEFAULT false,
   metadata    JSONB NOT NULL DEFAULT '{}',
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -197,6 +200,62 @@ CREATE POLICY tenant_isolation_qa_pairs ON qa_pairs
 -- qa_pairs is append-only: SELECT + INSERT only
 GRANT SELECT, INSERT ON qa_pairs TO app_user;
 GRANT SELECT, INSERT ON qa_pairs TO job_worker;
+
+-- ============================================================
+-- Completeness Tracking (Observation Pipeline, ADR-0015.6)
+-- セッションごとのヒアリング完了度を追跡。フィードバックループで
+-- 次ターンの System Prompt に未収集項目を注入する。
+-- ============================================================
+CREATE TABLE completeness_tracking (
+  id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id               UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  session_id              UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  source_domain           TEXT NOT NULL DEFAULT 'estimation',
+  checklist               JSONB NOT NULL DEFAULT '{}',
+  overall_completeness    NUMERIC(4,3) NOT NULL DEFAULT 0 CHECK (overall_completeness BETWEEN 0 AND 1),
+  suggested_next_topics   TEXT[] NOT NULL DEFAULT '{}',
+  turn_count              INTEGER NOT NULL DEFAULT 0,
+  updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, session_id, source_domain)
+);
+
+CREATE INDEX idx_completeness_tracking_session ON completeness_tracking(tenant_id, session_id);
+
+ALTER TABLE completeness_tracking ENABLE ROW LEVEL SECURITY;
+ALTER TABLE completeness_tracking FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation_completeness_tracking ON completeness_tracking
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
+  WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+GRANT SELECT, INSERT, UPDATE ON completeness_tracking TO app_user;
+GRANT SELECT, INSERT, UPDATE ON completeness_tracking TO job_worker;
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON completeness_tracking
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================
+-- Dead Letter Events (ADR-0015.8)
+-- 抽出失敗イベントを記録。リトライ制御と障害分析に使用。
+-- ============================================================
+CREATE TABLE dead_letter_events (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id       UUID REFERENCES tenants(id) ON DELETE RESTRICT,
+  event_id        UUID NOT NULL,
+  event_type      TEXT NOT NULL,
+  reason          TEXT NOT NULL,
+  retry_count     INTEGER NOT NULL DEFAULT 0,
+  max_retries     INTEGER NOT NULL DEFAULT 3,
+  last_retried_at TIMESTAMPTZ,
+  resolved_at     TIMESTAMPTZ,
+  original_payload JSONB NOT NULL DEFAULT '{}',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_dead_letter_unresolved ON dead_letter_events(event_type, created_at) WHERE resolved_at IS NULL;
+
+-- dead_letter_events は RLS 対象外（job_worker がクロステナントで処理する）
+GRANT SELECT, INSERT, UPDATE ON dead_letter_events TO job_worker;
+GRANT SELECT ON dead_letter_events TO app_user;
 
 -- ============================================================
 -- Source Documents (Intake Context)
