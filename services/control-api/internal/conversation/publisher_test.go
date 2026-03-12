@@ -3,6 +3,7 @@ package conversation
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -132,4 +133,179 @@ func TestPublishTurnCompleted_ValidationErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPublishTurnCompleted_NilPublisher(t *testing.T) {
+	var pub *Publisher
+	err := pub.PublishTurnCompleted(context.Background(), PublishInput{
+		TenantID:   uuid.New(),
+		SessionID:  uuid.New(),
+		TurnNumber: 1,
+		Role:       "user",
+	})
+	if err == nil {
+		t.Fatal("expected error for nil publisher")
+	}
+}
+
+func TestPublishTurnCompleted_NilMessagePublisher(t *testing.T) {
+	pub := &Publisher{messagePublisher: nil}
+	err := pub.PublishTurnCompleted(context.Background(), PublishInput{
+		TenantID:   uuid.New(),
+		SessionID:  uuid.New(),
+		TurnNumber: 1,
+		Role:       "user",
+	})
+	if err == nil {
+		t.Fatal("expected error for nil message publisher")
+	}
+}
+
+func TestPublishTurnCompleted_WithCausationID(t *testing.T) {
+	t.Parallel()
+
+	pub := &fakeMessagePublisher{}
+	sut := NewPublisher(pub, "test-topic")
+	fixedNow := time.Date(2026, 3, 12, 1, 2, 3, 0, time.UTC)
+	fixedEventID := uuid.MustParse("11111111-1111-4111-8111-111111111111")
+	sut.now = func() time.Time { return fixedNow }
+	sut.newUUID = func() uuid.UUID { return fixedEventID }
+
+	causationID := uuid.MustParse("55555555-5555-5555-8555-555555555555")
+
+	err := sut.PublishTurnCompleted(context.Background(), PublishInput{
+		TenantID:     uuid.New(),
+		SessionID:    uuid.New(),
+		TurnNumber:   1,
+		Role:         "user",
+		Content:      "hello",
+		CausationID:  &causationID,
+		SourceDomain: "custom-domain",
+	})
+	if err != nil {
+		t.Fatalf("PublishTurnCompleted returned error: %v", err)
+	}
+
+	if len(pub.messages) != 1 {
+		t.Fatalf("published messages = %d, want 1", len(pub.messages))
+	}
+
+	var event envelope
+	if err := json.Unmarshal(pub.messages[0].data, &event); err != nil {
+		t.Fatalf("failed to unmarshal event json: %v", err)
+	}
+
+	if event.CausationID == nil || *event.CausationID != causationID.String() {
+		t.Errorf("causation_id = %v, want %s", event.CausationID, causationID.String())
+	}
+	if event.SourceDomain != "custom-domain" {
+		t.Errorf("source_domain = %q, want %q", event.SourceDomain, "custom-domain")
+	}
+}
+
+func TestPublishTurnCompleted_DefaultTopicAndSourceDomain(t *testing.T) {
+	t.Parallel()
+
+	pub := &fakeMessagePublisher{}
+	sut := NewPublisher(pub, "")
+	if sut == nil {
+		t.Fatal("NewPublisher returned nil")
+	}
+
+	err := sut.PublishTurnCompleted(context.Background(), PublishInput{
+		TenantID:   uuid.New(),
+		SessionID:  uuid.New(),
+		TurnNumber: 1,
+		Role:       "user",
+		Content:    "hello",
+	})
+	if err != nil {
+		t.Fatalf("PublishTurnCompleted returned error: %v", err)
+	}
+
+	if len(pub.messages) != 1 {
+		t.Fatalf("published messages = %d, want 1", len(pub.messages))
+	}
+
+	if pub.messages[0].topic != defaultTopicName {
+		t.Errorf("topic = %q, want default %q", pub.messages[0].topic, defaultTopicName)
+	}
+
+	var event envelope
+	if err := json.Unmarshal(pub.messages[0].data, &event); err != nil {
+		t.Fatalf("failed to unmarshal event json: %v", err)
+	}
+	if event.SourceDomain != defaultSourceDomain {
+		t.Errorf("source_domain = %q, want default %q", event.SourceDomain, defaultSourceDomain)
+	}
+}
+
+func TestPublishTurnCompleted_PublishError(t *testing.T) {
+	t.Parallel()
+
+	pub := &errorMessagePublisher{err: fmt.Errorf("publish failed")}
+	sut := NewPublisher(pub, "test-topic")
+
+	err := sut.PublishTurnCompleted(context.Background(), PublishInput{
+		TenantID:   uuid.New(),
+		SessionID:  uuid.New(),
+		TurnNumber: 1,
+		Role:       "user",
+		Content:    "hello",
+	})
+	if err == nil {
+		t.Fatal("expected error from publish")
+	}
+}
+
+func TestNormalizePreviousTurns_EmptyInput(t *testing.T) {
+	result := normalizePreviousTurns(nil, 5)
+	if result != nil {
+		t.Errorf("normalizePreviousTurns(nil) = %v, want nil", result)
+	}
+}
+
+func TestNormalizePreviousTurns_FiltersInvalidTurns(t *testing.T) {
+	turns := []Turn{
+		{Role: "user", Content: "t1", TurnNumber: 0},  // invalid: <= 0
+		{Role: "user", Content: "t2", TurnNumber: -1}, // invalid: <= 0
+		{Role: "user", Content: "t3", TurnNumber: 5},  // invalid: >= currentTurn
+		{Role: "user", Content: "t4", TurnNumber: 6},  // invalid: >= currentTurn
+		{Role: "user", Content: "t5", TurnNumber: 3},  // valid
+	}
+
+	result := normalizePreviousTurns(turns, 5)
+	if len(result) != 1 {
+		t.Fatalf("normalizePreviousTurns() = %d turns, want 1", len(result))
+	}
+	if result[0].TurnNumber != 3 {
+		t.Errorf("result[0].TurnNumber = %d, want 3", result[0].TurnNumber)
+	}
+}
+
+func TestNormalizePreviousTurns_TruncatesToLastN(t *testing.T) {
+	turns := []Turn{
+		{Role: "user", Content: "t1", TurnNumber: 1},
+		{Role: "assistant", Content: "t2", TurnNumber: 2},
+		{Role: "user", Content: "t3", TurnNumber: 3},
+		{Role: "assistant", Content: "t4", TurnNumber: 4},
+		{Role: "user", Content: "t5", TurnNumber: 5},
+	}
+
+	result := normalizePreviousTurns(turns, 10)
+	if len(result) != defaultPreviousTurnSize {
+		t.Fatalf("normalizePreviousTurns() = %d turns, want %d", len(result), defaultPreviousTurnSize)
+	}
+	// Should keep the last 3: turns 3, 4, 5
+	if result[0].TurnNumber != 3 || result[1].TurnNumber != 4 || result[2].TurnNumber != 5 {
+		t.Errorf("expected last 3 turns, got %+v", result)
+	}
+}
+
+type errorMessagePublisher struct {
+	err error
+}
+
+func (e *errorMessagePublisher) Publish(_ context.Context, _ string, _ string, _ []byte) error {
+	return e.err
 }
