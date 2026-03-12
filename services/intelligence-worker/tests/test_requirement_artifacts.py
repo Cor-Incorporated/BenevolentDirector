@@ -160,6 +160,8 @@ def test_repository_save_artifact_increments_version() -> None:
     )
 
     assert version == 2
-    insert_call = mock_cursor.execute.call_args_list[1]
-    assert insert_call.args[1][2] == 2
-    assert insert_call.args[1][4] == ["11111111-1111-1111-1111-111111111111"]
+    # Atomic INSERT with embedded SELECT — single execute call
+    insert_call = mock_cursor.execute.call_args_list[0]
+    assert "COALESCE" in insert_call.args[0]
+    # params: (tenant_id, case_id, tenant_id, case_id, markdown, source_chunks, uid)
+    assert insert_call.args[1][5] == ["11111111-1111-1111-1111-111111111111"]
