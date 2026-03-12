@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { components } from '@/types/api'
 import { API_BASE_URL, DEFAULT_TENANT_ID, getApiErrorMessage } from '@/lib/api-client'
 
+export const MAX_MESSAGE_LENGTH = 10_000
+
 type ConversationTurn = components['schemas']['ConversationTurn']
 
 type StreamChunk = {
@@ -30,6 +32,14 @@ function createOptimisticTurn(caseId: string, content: string): ConversationTurn
   }
 }
 
+function safeParseChunk(raw: string): StreamChunk | null {
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
 async function parseNdjsonStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onContent: (text: string) => void,
@@ -40,19 +50,49 @@ async function parseNdjsonStream(
   let buffer = ''
   let accumulated = ''
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
 
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? ''
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
 
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
 
-      const chunk: StreamChunk = JSON.parse(trimmed)
+        const chunk = safeParseChunk(trimmed)
+        if (!chunk) {
+          onError('Failed to parse server response.')
+          return
+        }
+
+        if (chunk.error) {
+          onError(chunk.error)
+          return
+        }
+
+        if (chunk.type === 'content') {
+          accumulated += chunk.content
+          onContent(accumulated)
+        }
+
+        if (chunk.done) {
+          onDone(accumulated)
+          return
+        }
+      }
+    }
+
+    const remaining = buffer.trim()
+    if (remaining) {
+      const chunk = safeParseChunk(remaining)
+      if (!chunk) {
+        onError('Failed to parse server response.')
+        return
+      }
 
       if (chunk.error) {
         onError(chunk.error)
@@ -66,9 +106,10 @@ async function parseNdjsonStream(
 
       if (chunk.done) {
         onDone(accumulated)
-        return
       }
     }
+  } finally {
+    reader.releaseLock()
   }
 }
 
@@ -90,6 +131,11 @@ export function useConversation(
   }, [])
 
   const sendMessage = useCallback(async (content: string) => {
+    if (content.length > MAX_MESSAGE_LENGTH) {
+      setErrorMessage(`Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters.`)
+      return
+    }
+
     const optimisticTurn = createOptimisticTurn(caseId, content)
     setMessages((prev) => [...prev, optimisticTurn])
     setErrorMessage(null)
@@ -149,6 +195,7 @@ export function useConversation(
           setIsStreaming(false)
         },
         (errorMsg) => {
+          setMessages((prev) => prev.filter((m) => m.id !== optimisticTurn.id))
           setErrorMessage(errorMsg)
           setStreamingContent('')
           setIsStreaming(false)

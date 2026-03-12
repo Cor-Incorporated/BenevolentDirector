@@ -1,4 +1,5 @@
 import { type ChangeEvent, type KeyboardEvent, useCallback, useState } from 'react'
+import { MAX_MESSAGE_LENGTH } from '@/hooks/useConversation'
 
 type ChatInputProps = {
   onSend: (content: string) => Promise<void>
@@ -38,6 +39,7 @@ export function ChatInput({ onSend, isSending, isStreaming, disabled }: ChatInpu
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         disabled={isDisabled}
+        maxLength={MAX_MESSAGE_LENGTH}
         rows={2}
         placeholder={isDisabled ? 'Waiting for response...' : 'Type your message...'}
         className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none resize-none disabled:cursor-not-allowed disabled:opacity-50"

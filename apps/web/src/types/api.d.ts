@@ -184,6 +184,31 @@ export interface paths {
             }
           }
         }
+        400: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        401: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        403: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        404: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        429: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
       }
     }
     post: {
@@ -202,6 +227,31 @@ export interface paths {
             'application/json': {
               data?: components['schemas']['ConversationTurn']
             }
+          }
+        }
+        400: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        401: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        403: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        404: {
+          content: {
+            'application/json': ErrorResponse
+          }
+        }
+        429: {
+          content: {
+            'application/json': ErrorResponse
           }
         }
       }
