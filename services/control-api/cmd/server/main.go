@@ -50,6 +50,11 @@ func main() {
 	velocityHandler := handler.NewVelocityHandler(github.NewSQLVelocityStore(db))
 	mux.HandleFunc("GET /v1/repositories/{repositoryId}/velocity", velocityHandler.GetRepositoryVelocity)
 
+	// Source document routes (P3-01)
+	// TODO(P3): inject real source_document SQL store and GCS uploader.
+	sourceDocumentHandler := handler.NewSourceDocumentHandler(nil, nil)
+	handler.RegisterSourceDocumentRoutes(mux, sourceDocumentHandler)
+
 	caseHandler := handler.NewCaseHandler(db)
 	handler.RegisterCaseRoutes(mux, caseHandler)
 
