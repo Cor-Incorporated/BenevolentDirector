@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -212,6 +213,7 @@ class CompletenessTrackingRepository:
     """Persist completeness feedback loop state."""
 
     _columns_cache: dict[str, set[str]] | None = None
+    _columns_lock = threading.Lock()
 
     def __init__(self, conn_manager: ConnectionManager) -> None:
         self._conn_manager = conn_manager
@@ -223,27 +225,34 @@ class CompletenessTrackingRepository:
                 "completeness_tracking"
             )
 
-        with (
-            self._conn_manager.get_connection(tenant_id) as conn,
-            conn,
-            conn.cursor() as cur,
-        ):
-            cur.execute(
-                """
-                    SELECT column_name
-                    FROM information_schema.columns
-                    WHERE table_schema = current_schema()
-                      AND table_name = 'completeness_tracking'
-                    """,
-            )
-            columns = {row[0] for row in cur.fetchall()}
-            if not columns:
-                CompletenessTrackingRepository._columns_cache = {}
-                return None
-            CompletenessTrackingRepository._columns_cache = {
-                "completeness_tracking": columns,
-            }
-            return columns
+        with CompletenessTrackingRepository._columns_lock:
+            # Double-check after acquiring the lock.
+            if CompletenessTrackingRepository._columns_cache is not None:
+                return CompletenessTrackingRepository._columns_cache.get(
+                    "completeness_tracking"
+                )
+
+            with (
+                self._conn_manager.get_connection(tenant_id) as conn,
+                conn,
+                conn.cursor() as cur,
+            ):
+                cur.execute(
+                    """
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_schema = current_schema()
+                          AND table_name = 'completeness_tracking'
+                        """,
+                )
+                columns = {row[0] for row in cur.fetchall()}
+                if not columns:
+                    CompletenessTrackingRepository._columns_cache = {}
+                    return None
+                CompletenessTrackingRepository._columns_cache = {
+                    "completeness_tracking": columns,
+                }
+                return columns
 
     def save_snapshot(
         self,

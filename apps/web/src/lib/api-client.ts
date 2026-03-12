@@ -151,7 +151,11 @@ export async function* streamMessage(
       for (const line of lines) {
         const trimmed = line.trim()
         if (trimmed === '') continue
-        yield JSON.parse(trimmed) as NDJSONChunk
+        try {
+          yield JSON.parse(trimmed) as NDJSONChunk
+        } catch {
+          yield { type: 'error', error: `Malformed NDJSON: ${trimmed.slice(0, 100)}` } as NDJSONChunk
+        }
       }
     }
 
@@ -159,7 +163,11 @@ export async function* streamMessage(
     buffer += decoder.decode()
 
     if (buffer.trim() !== '') {
-      yield JSON.parse(buffer.trim()) as NDJSONChunk
+      try {
+        yield JSON.parse(buffer.trim()) as NDJSONChunk
+      } catch {
+        yield { type: 'error', error: `Malformed NDJSON: ${buffer.trim().slice(0, 100)}` } as NDJSONChunk
+      }
     }
   } finally {
     reader.releaseLock()

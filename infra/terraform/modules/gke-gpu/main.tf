@@ -97,14 +97,6 @@ resource "google_container_cluster" "gpu" {
     workload_pool = "${var.project_id}.svc.id.goog"
   }
 
-  # Security: shielded nodes
-  node_config {
-    shielded_instance_config {
-      enable_secure_boot          = true
-      enable_integrity_monitoring = true
-    }
-  }
-
   # Release channel for automatic upgrades
   release_channel {
     channel = var.environment == "prod" ? "STABLE" : "REGULAR"

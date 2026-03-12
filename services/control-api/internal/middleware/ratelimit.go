@@ -21,21 +21,36 @@ type visitor struct {
 }
 
 // RateLimit returns a middleware that limits requests using a fixed-window
-// counter keyed by the X-Tenant-ID header (falls back to remote address).
+// counter keyed by RemoteAddr (with X-Tenant-ID as secondary discriminator).
 func RateLimit(cfg RateLimitConfig) Middleware {
 	var mu sync.Mutex
 	visitors := make(map[string]*visitor)
+	var lastSweep time.Time
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			key := r.Header.Get("X-Tenant-ID")
-			if key == "" {
-				key = r.RemoteAddr
+			// Use RemoteAddr as primary key to prevent client-controlled
+			// key abuse; append tenant ID for per-tenant fairness.
+			key := r.RemoteAddr
+			if tid := r.Header.Get("X-Tenant-ID"); tid != "" {
+				key = tid + ":" + key
 			}
 
 			mu.Lock()
-			v, exists := visitors[key]
 			now := time.Now()
+
+			// Periodic sweep: remove stale entries once per window to
+			// prevent unbounded map growth.
+			if now.Sub(lastSweep) >= cfg.Window {
+				for k, v := range visitors {
+					if now.Sub(v.lastReset) >= cfg.Window {
+						delete(visitors, k)
+					}
+				}
+				lastSweep = now
+			}
+
+			v, exists := visitors[key]
 			if !exists || now.Sub(v.lastReset) >= cfg.Window {
 				v = &visitor{tokens: 0, lastReset: now}
 				visitors[key] = v

@@ -77,39 +77,12 @@ class DeadLetterEventStore:
         original_payload: dict[str, Any],
         occurred_at: datetime | None = None,
     ) -> None:
-        timestamp = occurred_at or datetime.now(tz=UTC)
         try:
             with (
                 self._conn_manager.get_connection(tenant_id or "") as conn,
                 conn,
                 conn.cursor() as cur,
             ):
-                cur.execute(
-                    """
-                        SELECT id
-                        FROM dead_letter_events
-                        WHERE event_id = %s AND resolved_at IS NULL
-                        LIMIT 1
-                        """,
-                    (event_id,),
-                )
-                existing = cur.fetchone()
-                if existing:
-                    cur.execute(
-                        """
-                            UPDATE dead_letter_events
-                            SET reason = %s,
-                                original_payload = %s::jsonb
-                            WHERE id = %s
-                            """,
-                        (
-                            reason,
-                            json.dumps(original_payload, ensure_ascii=False),
-                            existing[0],
-                        ),
-                    )
-                    return
-
                 cur.execute(
                     """
                         INSERT INTO dead_letter_events (
@@ -122,7 +95,13 @@ class DeadLetterEventStore:
                             last_retried_at,
                             original_payload
                         )
-                        VALUES (%s, %s, %s, %s, 0, %s, %s, %s::jsonb)
+                        VALUES (%s, %s, %s, %s, 0, %s, NULL, %s::jsonb)
+                        ON CONFLICT (event_id) WHERE resolved_at IS NULL
+                        DO UPDATE SET
+                            retry_count = dead_letter_events.retry_count + 1,
+                            reason = EXCLUDED.reason,
+                            last_retried_at = now()
+                        RETURNING retry_count
                         """,
                     (
                         tenant_id,
@@ -130,7 +109,6 @@ class DeadLetterEventStore:
                         event_type,
                         reason,
                         self._max_retries,
-                        timestamp,
                         json.dumps(original_payload, ensure_ascii=False),
                     ),
                 )
