@@ -91,6 +91,11 @@ func main() {
 	conversationHandler := handler.NewConversationHandler(conversationService)
 	handler.RegisterConversationRoutes(mux, conversationHandler)
 
+	// Requirement artifact route (P3: RequirementArtifact GET endpoint)
+	reqArtifactStore := store.NewSQLRequirementArtifactStore(db)
+	reqArtifactHandler := handler.NewRequirementArtifactHandler(reqArtifactStore)
+	mux.HandleFunc("GET /v1/cases/{caseId}/requirement-artifact", reqArtifactHandler.GetLatestByCaseID)
+
 	var authMW, tenantMW func(http.Handler) http.Handler
 	if os.Getenv("AUTH_DISABLED") == "true" {
 		log.Println("WARNING: authentication disabled (AUTH_DISABLED=true)")
