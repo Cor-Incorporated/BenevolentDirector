@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
@@ -139,7 +140,11 @@ class GatewayIntentClassifier:
             headers=headers,
             method="POST",
         )
-        response = urllib.request.urlopen(request, timeout=self.timeout_seconds)
+        try:
+            response = urllib.request.urlopen(request, timeout=self.timeout_seconds)
+        except urllib.error.URLError as exc:
+            logger.error("llm_gateway_classify_intent_failed", error=str(exc))
+            raise
         try:
             body = json.loads(response.read().decode("utf-8"))
         finally:

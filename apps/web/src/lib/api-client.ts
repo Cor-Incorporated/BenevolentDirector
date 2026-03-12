@@ -8,7 +8,10 @@ export type CaseStatus = components['schemas']['CaseStatus']
 export type CaseType = components['schemas']['CaseType']
 
 // WARNING: dev-only stub — must be replaced before production (ADR-0003)
-export const DEFAULT_TENANT_ID = '11111111-1111-1111-1111-111111111111'
+// In production, tenant ID must come from Firebase Auth token claims.
+const DEV_TENANT_ID = '11111111-1111-1111-1111-111111111111'
+export const DEFAULT_TENANT_ID =
+  import.meta.env.VITE_TENANT_ID ?? DEV_TENANT_ID
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 
@@ -104,8 +107,16 @@ export async function listConversationTurns(
     throw new Error(`API error ${res.status}`)
   }
 
-  const json = (await res.json()) as { data: ConversationTurn[]; total: number }
-  return json.data
+  const json: unknown = await res.json()
+  if (
+    typeof json !== 'object' ||
+    json === null ||
+    !('data' in json) ||
+    !Array.isArray((json as Record<string, unknown>).data)
+  ) {
+    throw new Error('Unexpected API response shape')
+  }
+  return (json as { data: ConversationTurn[] }).data
 }
 
 export async function* streamMessage(
@@ -122,7 +133,7 @@ export async function* streamMessage(
         'X-Tenant-ID': DEFAULT_TENANT_ID,
       },
       body: JSON.stringify({ content }),
-      signal: signal ?? null,
+      ...(signal ? { signal } : {}),
     },
   )
 
