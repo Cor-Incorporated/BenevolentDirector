@@ -19,6 +19,8 @@ import (
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/llmclient"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/middleware"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/service"
+	sourcedocument "github.com/Cor-Incorporated/Grift/services/control-api/internal/source_document"
+	"github.com/Cor-Incorporated/Grift/services/control-api/internal/storage"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/store"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -53,8 +55,17 @@ func main() {
 	mux.HandleFunc("GET /v1/repositories/{repositoryId}/velocity", velocityHandler.GetRepositoryVelocity)
 
 	// Source document routes (P3-01)
-	// TODO(P3): inject real source_document SQL store and GCS uploader.
-	sourceDocumentHandler := handler.NewSourceDocumentHandler(nil, nil)
+	sourceDocStore := &sourcedocument.SQLStore{DB: db}
+	var gcsUploader storage.Uploader
+	if bucket := os.Getenv("GCS_BUCKET_SOURCE_DOCS"); bucket != "" {
+		client, err := storage.NewGCSClient(ctx, bucket)
+		if err != nil {
+			log.Fatalf("create GCS client: %v", err)
+		}
+		gcsUploader = client
+		log.Printf("GCS uploader enabled (bucket: %s)", bucket)
+	}
+	sourceDocumentHandler := handler.NewSourceDocumentHandler(sourceDocStore, gcsUploader)
 	handler.RegisterSourceDocumentRoutes(mux, sourceDocumentHandler)
 
 	conversationStore := store.NewSQLConversationStore(db)
@@ -88,7 +99,10 @@ func main() {
 		tenantMW = middleware.TenantWithStore(&middleware.SQLTenantStore{DB: db})
 	}
 
+	corsMW := middleware.CORS()
+
 	stack := middleware.Chain(
+		corsMW,
 		authMW,
 		tenantMW,
 	)
