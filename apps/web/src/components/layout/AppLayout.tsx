@@ -1,9 +1,9 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { cn } from '@/lib/cn'
 
-const navigationItems = [
+const navigationItems: { to: string; label: string; end: boolean }[] = [
   { to: '/', label: 'Dashboard', end: true },
-  { to: '/cases', label: 'Cases' },
+  { to: '/cases', label: 'Cases', end: false },
 ]
 
 export function AppLayout() {

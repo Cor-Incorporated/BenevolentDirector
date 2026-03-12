@@ -4,6 +4,7 @@ import {
   apiClient,
   caseTypeLabels,
   caseTypeOptions,
+  DEFAULT_TENANT_ID,
   getApiErrorMessage,
   type CaseType,
 } from '@/lib/api-client'
@@ -111,6 +112,9 @@ export function CaseCreate() {
 
     try {
       const { data, error } = await apiClient.POST('/v1/cases', {
+        params: {
+          header: { 'X-Tenant-ID': DEFAULT_TENANT_ID },
+        },
         body: {
           title: values.title.trim(),
           type: values.type as CaseType,

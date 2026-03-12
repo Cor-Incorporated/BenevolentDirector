@@ -4,6 +4,7 @@ import {
   apiClient,
   caseStatusLabels,
   caseTypeLabels,
+  DEFAULT_TENANT_ID,
   formatDateTime,
   getApiErrorMessage,
   type CaseDetailRecord,
@@ -31,7 +32,8 @@ export function CaseDetail() {
       try {
         const { data, error } = await apiClient.GET('/v1/cases/{caseId}', {
           params: {
-            path: { caseId },
+            header: { 'X-Tenant-ID': DEFAULT_TENANT_ID },
+            path: { caseId: caseId! },
           },
         })
 

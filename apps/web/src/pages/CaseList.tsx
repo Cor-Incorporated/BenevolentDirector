@@ -6,6 +6,7 @@ import {
   caseStatusOptions,
   caseTypeLabels,
   caseTypeOptions,
+  DEFAULT_TENANT_ID,
   formatDateTime,
   getApiErrorMessage,
   type CaseRecord,
@@ -57,6 +58,7 @@ export function CaseList() {
       try {
         const { data, error } = await apiClient.GET('/v1/cases', {
           params: {
+            header: { 'X-Tenant-ID': DEFAULT_TENANT_ID },
             query: {
               limit: PAGE_SIZE,
               offset,
