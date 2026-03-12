@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol
@@ -16,6 +15,61 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 logger = structlog.get_logger()
+
+_LOAD_DUE_WITH_TENANT_SQL = """\
+SELECT
+    id::text,
+    tenant_id::text,
+    event_id::text,
+    event_type,
+    reason,
+    retry_count,
+    max_retries,
+    last_retried_at,
+    original_payload
+FROM dead_letter_events
+WHERE tenant_id = %s
+  AND resolved_at IS NULL
+  AND retry_count < max_retries
+  AND (last_retried_at IS NULL
+       OR last_retried_at + (
+          CASE retry_count
+              WHEN 0 THEN interval '1 minute'
+              WHEN 1 THEN interval '5 minutes'
+              WHEN 2 THEN interval '30 minutes'
+              ELSE interval '30 minutes'
+          END
+       ) < %s)
+ORDER BY created_at ASC
+LIMIT %s
+"""
+
+_LOAD_DUE_ALL_SQL = """\
+SELECT
+    id::text,
+    tenant_id::text,
+    event_id::text,
+    event_type,
+    reason,
+    retry_count,
+    max_retries,
+    last_retried_at,
+    original_payload
+FROM dead_letter_events
+WHERE resolved_at IS NULL
+  AND retry_count < max_retries
+  AND (last_retried_at IS NULL
+       OR last_retried_at + (
+          CASE retry_count
+              WHEN 0 THEN interval '1 minute'
+              WHEN 1 THEN interval '5 minutes'
+              WHEN 2 THEN interval '30 minutes'
+              ELSE interval '30 minutes'
+          END
+       ) < %s)
+ORDER BY created_at ASC
+LIMIT %s
+"""
 
 RETRY_BACKOFF_SCHEDULE = (
     timedelta(minutes=1),
@@ -101,7 +155,6 @@ class DeadLetterEventStore:
                             retry_count = dead_letter_events.retry_count + 1,
                             reason = EXCLUDED.reason,
                             last_retried_at = now()
-                        RETURNING retry_count
                         """,
                     (
                         tenant_id,
@@ -129,59 +182,14 @@ class DeadLetterEventStore:
                 conn,
                 conn.cursor() as cur,
             ):
-                backoff_filter = (
-                    "AND retry_count < max_retries "
-                    "AND (last_retried_at IS NULL "
-                    "     OR last_retried_at + ("
-                    "        CASE retry_count"
-                    "            WHEN 0 THEN interval '1 minute'"
-                    "            WHEN 1 THEN interval '5 minutes'"
-                    "            WHEN 2 THEN interval '30 minutes'"
-                    "            ELSE interval '30 minutes'"
-                    "        END"
-                    "     ) < %s)"
-                )
                 if tenant_id is not None:
                     cur.execute(
-                        f"""
-                            SELECT
-                                id::text,
-                                tenant_id::text,
-                                event_id::text,
-                                event_type,
-                                reason,
-                                retry_count,
-                                max_retries,
-                                last_retried_at,
-                                original_payload
-                            FROM dead_letter_events
-                            WHERE tenant_id = %s
-                              AND resolved_at IS NULL
-                              {backoff_filter}
-                            ORDER BY created_at ASC
-                            LIMIT %s
-                            """,
+                        _LOAD_DUE_WITH_TENANT_SQL,
                         (tenant_id, current_time, limit),
                     )
                 else:
                     cur.execute(
-                        f"""
-                            SELECT
-                                id::text,
-                                tenant_id::text,
-                                event_id::text,
-                                event_type,
-                                reason,
-                                retry_count,
-                                max_retries,
-                                last_retried_at,
-                                original_payload
-                            FROM dead_letter_events
-                            WHERE resolved_at IS NULL
-                              {backoff_filter}
-                            ORDER BY created_at ASC
-                            LIMIT %s
-                            """,
+                        _LOAD_DUE_ALL_SQL,
                         (current_time, limit),
                     )
                 rows = cur.fetchall()
@@ -351,7 +359,6 @@ class DeadLetterRetryLoop:
         while not stop_event.is_set():
             self._processor.run_once()
             stop_event.wait(self._poll_interval_seconds)
-            time.sleep(0)
 
 
 def _optional_str(value: object) -> str | None:

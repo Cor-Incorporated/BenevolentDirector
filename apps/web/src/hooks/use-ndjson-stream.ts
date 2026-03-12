@@ -44,7 +44,7 @@ export function useNDJSONStream(): UseNDJSONStreamReturn {
             setError(chunk.error)
             return null
           } else if (chunk.type === 'done') {
-            turnId = null // done chunk doesn't carry turn_id in OpenAPI spec
+            turnId = ('turn_id' in chunk && typeof chunk.turn_id === 'string') ? chunk.turn_id : null
           }
         }
 

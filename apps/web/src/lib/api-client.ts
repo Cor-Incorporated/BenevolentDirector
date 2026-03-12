@@ -1,11 +1,13 @@
 import createClient from 'openapi-fetch'
 import type { components, paths } from '@/types/api'
+import type { ConversationTurn, NDJSONChunk } from '@/types/conversation'
 
 export type CaseRecord = components['schemas']['Case']
 export type CaseDetailRecord = components['schemas']['CaseWithDetails']
 export type CaseStatus = components['schemas']['CaseStatus']
 export type CaseType = components['schemas']['CaseType']
 
+// WARNING: dev-only stub — must be replaced before production (ADR-0003)
 export const DEFAULT_TENANT_ID = '11111111-1111-1111-1111-111111111111'
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
@@ -84,8 +86,6 @@ export function getApiErrorMessage(
 // ─── Conversation API helpers ───────────────────────────────
 // TODO: Auth headers will be added when Firebase Auth is integrated (ADR-0003).
 // Currently listConversationTurns and streamMessage send X-Tenant-ID only.
-
-import type { ConversationTurn, NDJSONChunk } from '@/types/conversation'
 
 export async function listConversationTurns(
   caseId: string,

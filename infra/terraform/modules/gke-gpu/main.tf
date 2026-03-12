@@ -176,7 +176,9 @@ resource "google_container_node_pool" "gpu" {
     # Service account with least-privilege
     service_account = google_service_account.gke_node.email
     oauth_scopes = [
-      "https://www.googleapis.com/auth/cloud-platform",
+      "https://www.googleapis.com/auth/logging.write",
+      "https://www.googleapis.com/auth/monitoring",
+      "https://www.googleapis.com/auth/devstorage.read_only",
     ]
 
     # Shielded instance

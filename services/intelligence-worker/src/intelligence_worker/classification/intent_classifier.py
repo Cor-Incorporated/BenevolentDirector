@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -107,6 +108,14 @@ class GatewayIntentClassifier:
     model: str = DEFAULT_QWEN_MODEL
     timeout_seconds: float = 10.0
     data_classification: str = DEFAULT_DATA_CLASSIFICATION
+
+    def __post_init__(self) -> None:
+        parsed = urllib.parse.urlparse(self.base_url)
+        if parsed.scheme not in ("http", "https"):
+            msg = f"base_url scheme must be http/https, got: {parsed.scheme!r}"
+            raise ValueError(msg)
+        if not parsed.hostname:
+            raise ValueError("base_url must include a hostname")
 
     def classify_intent(self, raw_text: str) -> ClassificationResult:
         payload = {

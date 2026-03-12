@@ -252,6 +252,7 @@ CREATE TABLE dead_letter_events (
 );
 
 CREATE INDEX idx_dead_letter_unresolved ON dead_letter_events(event_type, created_at) WHERE resolved_at IS NULL;
+CREATE UNIQUE INDEX dead_letter_events_event_id_unresolved ON dead_letter_events (event_id) WHERE resolved_at IS NULL;
 
 -- CI ガードレール: tenant_id を持つテーブルは RLS 必須
 ALTER TABLE dead_letter_events ENABLE ROW LEVEL SECURITY;

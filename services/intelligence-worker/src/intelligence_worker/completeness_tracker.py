@@ -14,6 +14,12 @@ COMPLETENESS_THRESHOLD = 0.8
 
 logger = structlog.get_logger()
 
+
+def _quote_ident(name: str) -> str:
+    """Quote a PostgreSQL identifier to prevent injection."""
+    return '"' + name.replace('"', '""') + '"'
+
+
 DOMAIN_CHECKLISTS: dict[str, tuple[str, ...]] = {
     "estimation": ("tech_stack", "scope", "timeline", "budget", "team"),
     "research": ("theme", "hypothesis", "segment", "insight"),
@@ -247,7 +253,8 @@ class CompletenessTrackingRepository:
                 )
                 columns = {row[0] for row in cur.fetchall()}
                 if not columns:
-                    CompletenessTrackingRepository._columns_cache = {}
+                    # Don't cache "table not found" — leave _columns_cache
+                    # as None so the next call re-queries.
                     return None
                 CompletenessTrackingRepository._columns_cache = {
                     "completeness_tracking": columns,
@@ -273,7 +280,7 @@ class CompletenessTrackingRepository:
                 session_id=session_id,
                 snapshot=snapshot,
             )
-            column_list = ", ".join(values.keys())
+            column_list = ", ".join(_quote_ident(k) for k in values)
             placeholders = ", ".join(["%s"] * len(values))
 
             # Resolve the actual column names used for the
@@ -284,7 +291,10 @@ class CompletenessTrackingRepository:
             conflict_col_domain = (
                 "source_domain" if "source_domain" in columns else "domain"
             )
-            conflict_cols = f"tenant_id, {conflict_col_session}, {conflict_col_domain}"
+            conflict_cols = ", ".join(
+                _quote_ident(c)
+                for c in ("tenant_id", conflict_col_session, conflict_col_domain)
+            )
 
             # Build SET clause for upsert (exclude conflict keys).
             conflict_key_set = {
@@ -293,7 +303,9 @@ class CompletenessTrackingRepository:
                 conflict_col_domain,
             }
             update_cols = [c for c in values if c not in conflict_key_set]
-            update_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
+            update_clause = ", ".join(
+                f"{_quote_ident(c)} = EXCLUDED.{_quote_ident(c)}" for c in update_cols
+            )
             if update_clause:
                 update_clause += ", updated_at = now()"
             else:
