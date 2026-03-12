@@ -43,9 +43,13 @@ class FallbackResult:
     content: str
     attempts: list[str]
     fallback_used: bool
-    usage: dict[str, int] = field(default_factory=lambda: {
-        "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
-    })
+    usage: dict[str, int] = field(
+        default_factory=lambda: {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        }
+    )
 
 
 class FallbackMetrics:
@@ -188,19 +192,19 @@ class FallbackEngine:
         attempts: list[str] = []
         eligible = self._eligible_stages(classification, fail_stages)
 
-        for position, (_index, stage) in enumerate(eligible):
+        for index, stage in eligible:
             attempts.append(stage.name)
             if not stage.base_url:
                 # No real endpoint configured — use stub
                 metrics.record_stage_success(stage.name)
-                if position > 0:
+                if index > 0:
                     metrics.record_fallback_triggered()
                 prompt = messages[-1]["content"] if messages else ""
                 return FallbackResult(
                     stage=stage,
                     content=f"[{stage.provider}/{stage.model}] {prompt}",
                     attempts=attempts,
-                    fallback_used=position > 0,
+                    fallback_used=index > 0,
                 )
             try:
                 provider = _build_provider(stage)
@@ -212,13 +216,13 @@ class FallbackEngine:
                     timeout=float(stage.timeout_seconds),
                 )
                 metrics.record_stage_success(stage.name)
-                if position > 0:
+                if index > 0:
                     metrics.record_fallback_triggered()
                 return FallbackResult(
                     stage=stage,
                     content=resp.content,
                     attempts=attempts,
-                    fallback_used=position > 0,
+                    fallback_used=index > 0,
                     usage={
                         "prompt_tokens": resp.prompt_tokens,
                         "completion_tokens": resp.completion_tokens,
@@ -246,7 +250,7 @@ class FallbackEngine:
         fail_stages = fail_stages or set()
         eligible = self._eligible_stages(classification, fail_stages)
 
-        for position, (_index, stage) in enumerate(eligible):
+        for index, stage in eligible:
             if not stage.base_url:
                 # Stub stage — yield a single chunk
                 async def _stub_stream(
@@ -259,7 +263,7 @@ class FallbackEngine:
                     )
 
                 metrics.record_stage_success(stage.name)
-                if position > 0:
+                if index > 0:
                     metrics.record_fallback_triggered()
                 return stage, _stub_stream()
 
@@ -275,7 +279,7 @@ class FallbackEngine:
                 # Peek first chunk to verify the stream works
                 # (connection errors surface here, not during iteration)
                 metrics.record_stage_success(stage.name)
-                if position > 0:
+                if index > 0:
                     metrics.record_fallback_triggered()
                 return stage, chunk_iter
             except Exception:
@@ -294,7 +298,7 @@ def resolve_classification(raw: str | None) -> str:
 
 def load_fallback_engine(config_path: str | None = None) -> FallbackEngine:
     source = _resolve_config_path(
-        config_path or os.getenv("LLM_GATEWAY_FALLBACK_CHAIN_CONFIG", "")
+        config_path or os.getenv("LLM_GATEWAY_FALLBACK_CHAIN_CONFIG") or ""
     )
     payload = json.loads(source.read_text(encoding="utf-8"))
     chain = payload.get("chain", [])
