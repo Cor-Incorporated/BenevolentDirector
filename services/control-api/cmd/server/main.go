@@ -99,7 +99,10 @@ func main() {
 		tenantMW = middleware.TenantWithStore(&middleware.SQLTenantStore{DB: db})
 	}
 
+	corsMW := middleware.CORS()
+
 	stack := middleware.Chain(
+		corsMW,
 		authMW,
 		tenantMW,
 	)
