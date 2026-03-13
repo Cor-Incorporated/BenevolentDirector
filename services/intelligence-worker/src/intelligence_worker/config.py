@@ -28,6 +28,7 @@ class Config:
     control_api_url: str
     control_api_token: str | None
     market_pubsub_subscription: str
+    estimate_pubsub_subscription: str
     grok_api_key: str | None
     brave_api_key: str | None
     perplexity_api_key: str | None
@@ -62,6 +63,10 @@ def load_config() -> Config:
     market_pubsub_subscription = os.environ.get(
         "MARKET_PUBSUB_SUBSCRIPTION",
         "market-research-requested-sub",
+    )
+    estimate_pubsub_subscription = os.environ.get(
+        "ESTIMATE_PUBSUB_SUBSCRIPTION",
+        "estimate-requested-sub",
     )
     llm_gateway_url = os.environ.get("LLM_GATEWAY_URL", "http://localhost:8081")
     pubsub_topic = os.environ.get("PUBSUB_TOPIC", "conversation-turns")
@@ -114,6 +119,7 @@ def load_config() -> Config:
         control_api_url=control_api_url,
         control_api_token=control_api_token,
         market_pubsub_subscription=market_pubsub_subscription,
+        estimate_pubsub_subscription=estimate_pubsub_subscription,
         grok_api_key=grok_api_key,
         brave_api_key=brave_api_key,
         perplexity_api_key=perplexity_api_key,
