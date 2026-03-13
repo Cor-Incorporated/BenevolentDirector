@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, cast
@@ -12,10 +13,9 @@ import pytest
 
 import intelligence_worker.main as main_module
 from intelligence_worker.dead_letter_events import (
-    _LOAD_DUE_ALL_SQL,
-    _LOAD_DUE_WITH_TENANT_SQL,
     DatabaseDeadLetterPublisher,
     DeadLetterEventStore,
+    DeadLetterRetryLoop,
     DeadLetterRetryProcessor,
     retry_backoff_for,
 )
@@ -156,7 +156,7 @@ class _InMemoryDeadLetterDB:
                 return True
 
             due_at = row.last_retried_at + retry_backoff_for(row.retry_count)
-            # Always inclusive (<=) — matches _LOAD_DUE_WITH_TENANT_SQL
+            # Always inclusive (<=) — matches production SQL behaviour
             # after the off-by-one fix.
             return due_at <= now
 
@@ -198,11 +198,12 @@ class _InMemoryDeadLetterDB:
 @dataclass
 class _FakeCursor:
     db: _InMemoryDeadLetterDB
-    tenant_scope: str
     rows: list[tuple[Any, ...]] = field(default_factory=list)
 
     def execute(self, sql: str, params: tuple[Any, ...]) -> None:
-        if "INSERT INTO dead_letter_events" in sql:
+        sql_lower = sql.lower()
+
+        if "insert into dead_letter_events" in sql_lower:
             tenant_id, event_id, event_type, reason, max_retries, payload_json = params
             self.db.insert_or_update_failure(
                 tenant_id=tenant_id,
@@ -215,8 +216,8 @@ class _FakeCursor:
             self.rows = []
             return
 
-        if sql == _LOAD_DUE_WITH_TENANT_SQL:
-            # params: (tenant_id, now, limit) matching SQL placeholders
+        if "from dead_letter_events" in sql_lower and "tenant_id = %s" in sql:
+            # Tenant-scoped load_due query
             tenant_id, now, limit = params
             self.rows = self.db.load_due(
                 tenant_id=tenant_id,
@@ -225,8 +226,8 @@ class _FakeCursor:
             )
             return
 
-        if sql == _LOAD_DUE_ALL_SQL:
-            # params: (now, limit) matching SQL placeholders
+        if "from dead_letter_events" in sql_lower and "tenant_id = %s" not in sql:
+            # System-wide load_due query (no tenant filter)
             now, limit = params
             self.rows = self.db.load_due(
                 tenant_id=None,
@@ -235,9 +236,8 @@ class _FakeCursor:
             )
             return
 
-        if "SET retry_count = retry_count + 1" in sql:
+        if "set retry_count = retry_count + 1" in sql_lower:
             # params: (occurred_at, exceeded_reason, reason, resolved_at, entry_id)
-            # matching UPDATE ... SET retry_count = retry_count + 1 placeholders
             occurred_at, _exceeded_reason, reason, _resolved_at, entry_id = params
             self.db.mark_retry_failure(
                 entry_id=entry_id,
@@ -247,7 +247,7 @@ class _FakeCursor:
             self.rows = []
             return
 
-        if "SET resolved_at = %s" in sql:
+        if "set resolved_at = %s" in sql_lower:
             resolved_at, entry_id = params
             self.db.mark_resolved(entry_id=entry_id, resolved_at=resolved_at)
             self.rows = []
@@ -257,6 +257,20 @@ class _FakeCursor:
 
     def fetchall(self) -> list[tuple[Any, ...]]:
         return list(self.rows)
+
+
+@dataclass
+class _FakeConnection:
+    db: _InMemoryDeadLetterDB
+
+    def __enter__(self) -> _FakeConnection:
+        return self
+
+    def __exit__(self, *_args: object) -> Literal[False]:
+        return False
+
+    def cursor(self) -> _FakeCursorContext:
+        return _FakeCursorContext(_FakeCursor(self.db))
 
 
 @dataclass
@@ -271,39 +285,13 @@ class _FakeCursorContext:
 
 
 @dataclass
-class _FakeConnection:
-    db: _InMemoryDeadLetterDB
-    tenant_scope: str
-
-    def __enter__(self) -> _FakeConnection:
-        return self
-
-    def __exit__(self, *_args: object) -> Literal[False]:
-        return False
-
-    def cursor(self) -> _FakeCursorContext:
-        return _FakeCursorContext(_FakeCursor(self.db, self.tenant_scope))
-
-
-@dataclass
-class _FakeConnectionContext:
-    connection: _FakeConnection
-
-    def __enter__(self) -> _FakeConnection:
-        return self.connection
-
-    def __exit__(self, *_args: object) -> Literal[False]:
-        return False
-
-
-@dataclass
 class _FakeConnectionManager:
     db: _InMemoryDeadLetterDB
     requested_tenants: list[str] = field(default_factory=list)
 
-    def get_connection(self, tenant_id: str) -> _FakeConnectionContext:
+    def get_connection(self, tenant_id: str) -> _FakeConnection:
         self.requested_tenants.append(tenant_id)
-        return _FakeConnectionContext(_FakeConnection(self.db, tenant_id))
+        return _FakeConnection(self.db)
 
 
 @dataclass
@@ -741,6 +729,48 @@ def test_handler_exception_nacks_message_for_redelivery() -> None:
     assert processed == []
     assert message.acked is False
     assert message.nacked is True
+
+
+def test_retry_loop_processes_due_event_before_stop() -> None:
+    """Verify DeadLetterRetryLoop.run() actually invokes the processor."""
+    store, db, _ = _make_store()
+    db.seed_event(
+        tenant_id=TENANT_A,
+        event_id="evt-loop",
+        created_at=BASE_TIME,
+        original_payload={
+            "tenant_id": TENANT_A,
+            "event_id": "evt-loop",
+            "event_type": EVENT_TYPE,
+            "payload": {"session_id": "case-loop"},
+        },
+    )
+    handled: list[dict[str, Any]] = []
+
+    def _succeed(payload: dict[str, Any]) -> None:
+        handled.append(payload)
+
+    processor = DeadLetterRetryProcessor(store=store, retry_handler=_succeed)
+    loop = DeadLetterRetryLoop(processor=processor, poll_interval_seconds=0.01)
+
+    stop = threading.Event()
+
+    def _run_and_stop() -> None:
+        loop.run(stop)
+
+    t = threading.Thread(target=_run_and_stop, daemon=True)
+    t.start()
+
+    # Give the loop time to process the due event, then signal stop.
+    t.join(timeout=2.0)
+    if t.is_alive():
+        stop.set()
+        t.join(timeout=2.0)
+
+    assert len(handled) >= 1
+    assert handled[0]["event_id"] == "evt-loop"
+    row = db.find_row("evt-loop")
+    assert row.resolved_at is not None
 
 
 def test_run_cancels_subscription_and_closes_resources_on_shutdown() -> None:
