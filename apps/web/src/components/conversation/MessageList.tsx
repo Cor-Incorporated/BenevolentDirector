@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { type ReactNode, useEffect, useRef } from 'react'
+import { cn } from '@/lib/cn'
 import type { ConversationTurn } from '@/types/conversation'
 import { MessageBubble } from './MessageBubble'
 import { StreamingIndicator } from './StreamingIndicator'
@@ -7,9 +8,21 @@ interface MessageListProps {
   turns: ConversationTurn[]
   streamingContent: string
   isStreaming: boolean
+  className?: string
+  emptyState?: ReactNode
+  renderTurn?: (turn: ConversationTurn) => ReactNode
+  renderStreamingIndicator?: (content: string) => ReactNode
 }
 
-export function MessageList({ turns, streamingContent, isStreaming }: MessageListProps) {
+export function MessageList({
+  turns,
+  streamingContent,
+  isStreaming,
+  className,
+  emptyState,
+  renderTurn,
+  renderStreamingIndicator,
+}: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -19,7 +32,7 @@ export function MessageList({ turns, streamingContent, isStreaming }: MessageLis
   }, [turns.length, streamingContent])
 
   if (turns.length === 0 && !isStreaming) {
-    return (
+    return emptyState ?? (
       <div className="flex-1 flex items-center justify-center text-gray-400">
         <p className="text-sm">Send a message to start the conversation.</p>
       </div>
@@ -27,11 +40,17 @@ export function MessageList({ turns, streamingContent, isStreaming }: MessageLis
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6">
+    <div className={cn('flex-1 overflow-y-auto px-4 py-6', className)}>
       {turns.map((turn) => (
-        <MessageBubble key={turn.id} turn={turn} />
+        <div key={turn.id}>
+          {renderTurn ? renderTurn(turn) : <MessageBubble turn={turn} />}
+        </div>
       ))}
-      {isStreaming && <StreamingIndicator content={streamingContent} />}
+      {isStreaming && (
+        renderStreamingIndicator
+          ? renderStreamingIndicator(streamingContent)
+          : <StreamingIndicator content={streamingContent} />
+      )}
       <div ref={bottomRef} />
     </div>
   )

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   caseStatusLabels,
   caseStatusOptions,
@@ -6,7 +6,16 @@ import {
   caseTypeOptions,
   formatDateTime,
   getApiErrorMessage,
+  getRequirementArtifact,
+  INTERNAL_DATA_CLASSIFICATION,
+  listObservationQAPairs,
+  listSourceDocuments,
+  uploadSourceDocument,
 } from './api-client'
+
+beforeEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('formatDateTime', () => {
   it('formats a valid ISO date string', () => {
@@ -86,5 +95,123 @@ describe('caseTypeOptions', () => {
     expect(caseTypeOptions).toContain('bug_report')
     expect(caseTypeOptions).toContain('undetermined')
     expect(caseTypeOptions).toHaveLength(5)
+  })
+})
+
+describe('hearing API helpers', () => {
+  it('lists source documents with the internal classification header', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: 'doc-1',
+              case_id: 'case-1',
+              file_name: 'brief.pdf',
+              status: 'completed',
+              created_at: '2026-03-13T09:00:00Z',
+            },
+          ],
+          total: 1,
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+
+    const documents = await listSourceDocuments('case-1')
+
+    expect(documents).toHaveLength(1)
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/cases/case-1/source-documents'),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'X-Data-Classification': INTERNAL_DATA_CLASSIFICATION,
+        }),
+      }),
+    )
+  })
+
+  it('returns null when the requirement artifact is not ready yet', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, { status: 404 }),
+    )
+
+    await expect(getRequirementArtifact('case-1')).resolves.toBeNull()
+  })
+
+  it('uploads a source document as multipart form data', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            id: 'doc-1',
+            case_id: 'case-1',
+            file_name: 'brief.pdf',
+            status: 'pending',
+            created_at: '2026-03-13T09:00:00Z',
+          },
+          job_id: 'job-1',
+        }),
+        {
+          status: 202,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+
+    const file = new File(['hello'], 'brief.pdf', { type: 'application/pdf' })
+    await uploadSourceDocument('case-1', { file })
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/cases/case-1/source-documents'),
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.any(FormData),
+        headers: expect.objectContaining({
+          'X-Data-Classification': INTERNAL_DATA_CLASSIFICATION,
+        }),
+      }),
+    )
+  })
+
+  it('lists observation QA pairs for completeness refresh', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: 'qa-1',
+              case_id: 'case-1',
+              session_id: 'session-1',
+              question_text: 'What is the launch window?',
+              answer_text: 'Q3 2026',
+              quality: {
+                completeness: 0.75,
+                coherence: 0.9,
+                rationale: 'Timing exists but needs more detail.',
+                needs_followup: true,
+                is_complete: false,
+              },
+              created_at: '2026-03-13T09:00:00Z',
+            },
+          ],
+          total: 1,
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+
+    await expect(listObservationQAPairs('case-1')).resolves.toEqual([
+      expect.objectContaining({
+        id: 'qa-1',
+        question_text: 'What is the launch window?',
+      }),
+    ])
   })
 })

@@ -1,6 +1,17 @@
 import createClient from 'openapi-fetch'
 import type { components, paths } from '@/types/api'
-import type { ConversationTurn, NDJSONChunk } from '@/types/conversation'
+import type {
+  ConversationTurn,
+  DataClassification,
+  GetRequirementArtifactResponse,
+  ListObservationQAPairsResponse,
+  ListSourceDocumentsResponse,
+  NDJSONChunk,
+  ObservationQAPair,
+  RequirementArtifact,
+  SourceDocument,
+  UploadSourceDocumentResponse,
+} from '@/types/conversation'
 
 export type CaseRecord = components['schemas']['Case']
 export type CaseDetailRecord = components['schemas']['CaseWithDetails']
@@ -14,6 +25,7 @@ export const DEFAULT_TENANT_ID =
   import.meta.env.VITE_TENANT_ID ?? DEV_TENANT_ID
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+export const INTERNAL_DATA_CLASSIFICATION: DataClassification = 'internal'
 
 export const caseTypeOptions: CaseType[] = [
   'new_project',
@@ -71,6 +83,24 @@ function isApiErrorPayload(value: unknown): value is ApiErrorPayload {
   return typeof value === 'object' && value !== null && 'error' in value
 }
 
+function buildHeaders(
+  overrides?: Record<string, string>,
+): Record<string, string> {
+  return {
+    'X-Tenant-ID': DEFAULT_TENANT_ID,
+    'X-Data-Classification': INTERNAL_DATA_CLASSIFICATION,
+    ...overrides,
+  }
+}
+
+async function parseJsonResponse<T>(response: Response): Promise<T | null> {
+  try {
+    return (await response.json()) as T
+  } catch {
+    return null
+  }
+}
+
 export function getApiErrorMessage(
   error: unknown,
   fallback = 'Something went wrong. Please try again.',
@@ -96,10 +126,7 @@ export async function listConversationTurns(
   const res = await fetch(
     `${API_BASE_URL}/v1/cases/${encodeURIComponent(caseId)}/conversations`,
     {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': DEFAULT_TENANT_ID,
-      },
+      headers: buildHeaders({ 'Content-Type': 'application/json' }),
     },
   )
 
@@ -119,6 +146,101 @@ export async function listConversationTurns(
   return (json as { data: ConversationTurn[] }).data
 }
 
+export async function listSourceDocuments(
+  caseId: string,
+): Promise<SourceDocument[]> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/cases/${encodeURIComponent(caseId)}/source-documents`,
+    {
+      headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    },
+  )
+
+  if (!res.ok) {
+    const body = await parseJsonResponse<unknown>(res)
+    throw new Error(getApiErrorMessage(body, `API error ${res.status}`))
+  }
+
+  const json = await parseJsonResponse<ListSourceDocumentsResponse>(res)
+  return json?.data ?? []
+}
+
+export async function getRequirementArtifact(
+  caseId: string,
+): Promise<RequirementArtifact | null> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/cases/${encodeURIComponent(caseId)}/requirement-artifact`,
+    {
+      headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    },
+  )
+
+  if (res.status === 404) {
+    return null
+  }
+
+  if (!res.ok) {
+    const body = await parseJsonResponse<unknown>(res)
+    throw new Error(getApiErrorMessage(body, `API error ${res.status}`))
+  }
+
+  const json = await parseJsonResponse<GetRequirementArtifactResponse>(res)
+  return json?.data ?? null
+}
+
+export async function uploadSourceDocument(
+  caseId: string,
+  input: { file?: File; sourceUrl?: string },
+): Promise<SourceDocument | null> {
+  if (!input.file && !input.sourceUrl) {
+    throw new Error('Provide a file or source URL to upload.')
+  }
+
+  const formData = new FormData()
+  if (input.file) {
+    formData.append('file', input.file)
+  }
+  if (input.sourceUrl) {
+    formData.append('source_url', input.sourceUrl)
+  }
+
+  const res = await fetch(
+    `${API_BASE_URL}/v1/cases/${encodeURIComponent(caseId)}/source-documents`,
+    {
+      method: 'POST',
+      headers: buildHeaders(),
+      body: formData,
+    },
+  )
+
+  if (!res.ok) {
+    const body = await parseJsonResponse<unknown>(res)
+    throw new Error(getApiErrorMessage(body, `API error ${res.status}`))
+  }
+
+  const json = await parseJsonResponse<UploadSourceDocumentResponse>(res)
+  return json?.data ?? null
+}
+
+export async function listObservationQAPairs(
+  caseId: string,
+): Promise<ObservationQAPair[]> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/cases/${encodeURIComponent(caseId)}/observation/qa-pairs`,
+    {
+      headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    },
+  )
+
+  if (!res.ok) {
+    const body = await parseJsonResponse<unknown>(res)
+    throw new Error(getApiErrorMessage(body, `API error ${res.status}`))
+  }
+
+  const json = await parseJsonResponse<ListObservationQAPairsResponse>(res)
+  return json?.data ?? []
+}
+
 export async function* streamMessage(
   caseId: string,
   content: string,
@@ -128,10 +250,10 @@ export async function* streamMessage(
     `${API_BASE_URL}/v1/cases/${encodeURIComponent(caseId)}/conversations/stream`,
     {
       method: 'POST',
-      headers: {
+      headers: buildHeaders({
+        Accept: 'application/x-ndjson',
         'Content-Type': 'application/json',
-        'X-Tenant-ID': DEFAULT_TENANT_ID,
-      },
+      }),
       body: JSON.stringify({ content }),
       ...(signal ? { signal } : {}),
     },
