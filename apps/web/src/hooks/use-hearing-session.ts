@@ -174,15 +174,26 @@ export function useHearingSession(caseId?: string): UseHearingSessionReturn {
 
     setIsLoading(true)
     try {
-      const [nextTurns, nextDocuments, nextArtifact] = await Promise.all([
-        listConversationTurns(caseId),
-        listSourceDocuments(caseId),
-        getRequirementArtifact(caseId),
-      ])
+      const [turnsResult, docsResult, artifactResult, qaResult] =
+        await Promise.allSettled([
+          listConversationTurns(caseId),
+          listSourceDocuments(caseId),
+          getRequirementArtifact(caseId),
+          listObservationQAPairs(caseId),
+        ])
 
-      setTurns(nextTurns)
-      setSourceDocuments(nextDocuments)
-      setRequirementArtifact(nextArtifact)
+      if (turnsResult.status === 'fulfilled') {
+        setTurns(turnsResult.value)
+      }
+      if (docsResult.status === 'fulfilled') {
+        setSourceDocuments(docsResult.value)
+      }
+      if (artifactResult.status === 'fulfilled') {
+        setRequirementArtifact(artifactResult.value)
+      }
+      if (qaResult.status === 'fulfilled') {
+        setQaPairs(qaResult.value ?? [])
+      }
       setError(null)
     } catch (err) {
       const message =
@@ -250,18 +261,28 @@ export function useHearingSession(caseId?: string): UseHearingSessionReturn {
         created_at: new Date().toISOString(),
       }
 
+      // Save current turns for rollback in case sendStreamMessage fails
+      const snapshotTurns = turns
       setTurns((previousTurns) => [...previousTurns, optimisticTurn])
       setError(null)
 
-      const assistantTurn = await sendStreamMessage(caseId, content)
-      if (!assistantTurn || !isMountedRef.current) {
-        return
-      }
+      try {
+        const assistantTurn = await sendStreamMessage(caseId, content)
+        if (!assistantTurn || !isMountedRef.current) {
+          return
+        }
 
-      setTurns((previousTurns) => [...previousTurns, assistantTurn])
-      schedulePostTurnRefreshes()
+        setTurns((previousTurns) => [...previousTurns, assistantTurn])
+        schedulePostTurnRefreshes()
+      } catch (err) {
+        // Roll back the optimistic user turn on network/stream failure
+        setTurns(snapshotTurns)
+        const message =
+          err instanceof Error ? err.message : 'Failed to send message'
+        setError(message)
+      }
     },
-    [caseId, schedulePostTurnRefreshes, sendStreamMessage],
+    [caseId, schedulePostTurnRefreshes, sendStreamMessage, turns],
   )
 
   const appendUploadedDocument = useCallback(

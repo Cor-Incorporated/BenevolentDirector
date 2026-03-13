@@ -57,7 +57,10 @@ export interface SourceDocument {
   source_kind?: 'file_upload' | 'repository_url' | 'website_url'
   source_url?: string
   status: 'pending' | 'processing' | 'completed' | 'failed'
-  gcs_path?: string
+  // NOTE: gcs_path is intentionally omitted — it is an internal GCS storage
+  // path that should not be exposed to the frontend. The control-api may still
+  // include it in responses, but we do not type it here to prevent accidental
+  // rendering or leakage to end users.
   analysis_result?: Record<string, unknown>
   created_at: string
 }

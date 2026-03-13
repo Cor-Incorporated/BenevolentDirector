@@ -31,6 +31,10 @@ function renderLine(line: string, index: number) {
   // NOTE: List items are rendered as individual <p> elements rather than
   // proper <ul>/<ol> containers. Grouping consecutive list items into
   // semantic list elements would require a multi-pass parser.
+  // NOTE: Inline markdown formatting (**bold**, `code`, [links](url)) is
+  // intentionally not processed. This viewer handles block-level structure
+  // only; adding inline formatting would require a richer parser or a
+  // full markdown library.
   if (/^[-*] /.test(line)) {
     return (
       <p key={key} className="pl-4 text-pretty text-sm text-slate-700">

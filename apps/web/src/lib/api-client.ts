@@ -83,6 +83,11 @@ function isApiErrorPayload(value: unknown): value is ApiErrorPayload {
   return typeof value === 'object' && value !== null && 'error' in value
 }
 
+// Builds common headers for all API requests. X-Data-Classification: internal
+// is intentionally attached to every request (including read-only endpoints
+// like listConversationTurns) so the control-api can enforce data-handling
+// policies uniformly. The control-api ignores unrecognised headers, so this
+// addition is backwards-compatible.
 function buildHeaders(
   overrides?: Record<string, string>,
 ): Record<string, string> {
