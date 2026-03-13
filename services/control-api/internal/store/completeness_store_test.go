@@ -28,11 +28,12 @@ func TestSQLCompletenessStore_GetByCaseID(t *testing.T) {
 				m.ExpectQuery(`SELECT .* FROM completeness_tracking`).
 					WithArgs(tenantID, caseID).
 					WillReturnRows(
-						sqlmock.NewRows([]string{"checklist", "overall_completeness", "suggested_next_topics"}).
+						sqlmock.NewRows([]string{"checklist", "overall_completeness", "suggested_next_topics", "turn_count"}).
 							AddRow(
 								`{"budget":{"status":"partial","confidence":0.5},"tech_stack":{"status":"collected","confidence":1}}`,
 								0.6,
 								"{budget,timeline}",
+								4,
 							),
 					)
 			},
@@ -45,7 +46,7 @@ func TestSQLCompletenessStore_GetByCaseID(t *testing.T) {
 			mock: func(m sqlmock.Sqlmock) {
 				m.ExpectQuery(`SELECT .* FROM completeness_tracking`).
 					WithArgs(tenantID, caseID).
-					WillReturnRows(sqlmock.NewRows([]string{"checklist", "overall_completeness", "suggested_next_topics"}))
+					WillReturnRows(sqlmock.NewRows([]string{"checklist", "overall_completeness", "suggested_next_topics", "turn_count"}))
 			},
 			wantNil: true,
 		},
@@ -95,6 +96,9 @@ func TestSQLCompletenessStore_GetByCaseID(t *testing.T) {
 			if got.Checklist["budget"].Status != tt.wantStatus {
 				t.Fatalf("Checklist[budget].Status = %q, want %q", got.Checklist["budget"].Status, tt.wantStatus)
 			}
+			if got.TurnCount != 4 && tt.name == "happy path" {
+				t.Fatalf("TurnCount = %d, want 4", got.TurnCount)
+			}
 			if len(got.SuggestedNextTopics) != len(tt.wantTopics) {
 				t.Fatalf("len(SuggestedNextTopics) = %d, want %d", len(got.SuggestedNextTopics), len(tt.wantTopics))
 			}
@@ -124,8 +128,8 @@ func TestSQLCompletenessStore_GetByCaseID_InvalidChecklistJSON(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM completeness_tracking`).
 		WithArgs(tenantID, caseID).
 		WillReturnRows(
-			sqlmock.NewRows([]string{"checklist", "overall_completeness", "suggested_next_topics"}).
-				AddRow(`{`, 0.2, "{}"),
+			sqlmock.NewRows([]string{"checklist", "overall_completeness", "suggested_next_topics", "turn_count"}).
+				AddRow(`{`, 0.2, "{}", 1),
 		)
 
 	s := NewSQLCompletenessStore(db)

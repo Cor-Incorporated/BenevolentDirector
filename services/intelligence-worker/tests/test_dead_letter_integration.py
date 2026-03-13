@@ -362,11 +362,12 @@ class _FakeRuntimeSubscriber:
 
 @dataclass
 class _FakeRuntimeSubscriberFactory:
-    instance: _FakeRuntimeSubscriber = field(default_factory=_FakeRuntimeSubscriber)
+    instances: list[_FakeRuntimeSubscriber] = field(default_factory=list)
 
     def __call__(self, **kwargs: Any) -> _FakeRuntimeSubscriber:
-        self.instance.init_kwargs = kwargs
-        return self.instance
+        instance = _FakeRuntimeSubscriber(init_kwargs=kwargs)
+        self.instances.append(instance)
+        return instance
 
 
 @dataclass
@@ -410,6 +411,21 @@ class _FakeThreadFactory:
 @dataclass
 class _FakePubSubClient:
     closed: bool = False
+    published: list[dict[str, Any]] = field(default_factory=list)
+
+    def topic_path(self, project_id: str, topic_id: str) -> str:
+        return f"projects/{project_id}/topics/{topic_id}"
+
+    def publish(
+        self,
+        topic: str,
+        data: bytes,
+        ordering_key: str = "",
+    ) -> _FakeFuture:
+        self.published.append(
+            {"topic": topic, "data": data, "ordering_key": ordering_key}
+        )
+        return _FakeFuture()
 
     def close(self) -> None:
         self.closed = True
@@ -461,10 +477,15 @@ class _FakeLLM:
     should_fail: bool = False
 
     def extract_structured(
-        self, *, prompt: str, response_schema: dict[str, Any]
+        self,
+        *,
+        prompt: str,
+        response_schema: dict[str, Any],
+        system_prompt: str | None = None,
     ) -> str:
         assert "qa_pairs" in response_schema.get("properties", {})
         assert "source_domain=" in prompt
+        _ = system_prompt
         if self.should_fail:
             raise RuntimeError("llm unavailable")
         return self.response_text
@@ -815,6 +836,8 @@ def test_run_cancels_subscription_and_closes_resources_on_shutdown() -> None:
         control_api_token="token",
         pubsub_project_id="project-1",
         pubsub_subscription="conversation-turn-completed",
+        pubsub_completeness_subscription="observation-completeness-updated",
+        pubsub_topic="observation-events",
     )
     conn_manager = MagicMock()
     thread_factory = _FakeThreadFactory()
@@ -834,8 +857,13 @@ def test_run_cancels_subscription_and_closes_resources_on_shutdown() -> None:
         ),
         patch.object(
             main_module,
-            "ConversationTurnCompletedSubscriber",
+            "EventSubscriber",
             side_effect=subscriber_factory,
+        ),
+        patch.object(
+            main_module.pubsub_v1,
+            "PublisherClient",
+            return_value=subscriber_client,
         ),
     ):
         main_module.run()
@@ -847,11 +875,16 @@ def test_run_cancels_subscription_and_closes_resources_on_shutdown() -> None:
     assert retry_thread.started is True
     assert retry_thread.join_calls == [1]
 
-    subscriber = subscriber_factory.instance
+    assert len(subscriber_factory.instances) == 1
+    subscriber = subscriber_factory.instances[0]
     assert subscriber.started is True
     assert subscriber.future.canceled is True
     assert subscriber.init_kwargs["project_id"] == "project-1"
     assert subscriber.init_kwargs["subscription_id"] == ("conversation-turn-completed")
+    assert set(subscriber.init_kwargs["handlers"]) == {
+        "conversation.turn.completed",
+        "observation.completeness.updated",
+    }
     assert shutdown_event.wait_calls == [None]
     assert subscriber_client.closed is True
     conn_manager.close_all.assert_called_once_with()

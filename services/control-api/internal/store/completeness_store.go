@@ -32,6 +32,7 @@ type CompletenessObservation struct {
 	OverallCompleteness float64                              `json:"overall_completeness"`
 	Checklist           map[string]CompletenessChecklistItem `json:"checklist"`
 	SuggestedNextTopics []string                             `json:"suggested_next_topics"`
+	TurnCount           int                                  `json:"-"`
 }
 
 // CompletenessStore provides read access to completeness feedback-loop state.
@@ -66,7 +67,7 @@ func NewSQLCompletenessStore(db *sql.DB) *SQLCompletenessStore {
 // adding a source_domain parameter or renaming to GetByEstimationDomain.
 func (s *SQLCompletenessStore) GetByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*CompletenessObservation, error) {
 	const query = `
-		SELECT checklist, overall_completeness, suggested_next_topics
+		SELECT checklist, overall_completeness, suggested_next_topics, turn_count
 		FROM completeness_tracking
 		WHERE tenant_id = $1 AND session_id = $2 AND source_domain = 'estimation'
 		ORDER BY updated_at DESC, created_at DESC
@@ -83,6 +84,7 @@ func (s *SQLCompletenessStore) GetByCaseID(ctx context.Context, tenantID, caseID
 		&checklistRaw,
 		&observation.OverallCompleteness,
 		pq.Array(&topics),
+		&observation.TurnCount,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil

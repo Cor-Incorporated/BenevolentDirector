@@ -371,6 +371,7 @@ CREATE TABLE requirement_artifacts (
   version         INTEGER NOT NULL DEFAULT 1,
   markdown        TEXT NOT NULL,
   source_chunks   UUID[] NOT NULL DEFAULT '{}',
+  citations       JSONB NOT NULL DEFAULT '[]',
   status          TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'finalized')),
   created_by_uid  TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
