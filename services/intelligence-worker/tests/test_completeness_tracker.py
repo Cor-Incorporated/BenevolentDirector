@@ -10,11 +10,13 @@ from intelligence_worker.completeness_tracker import (
     COMPLETENESS_THRESHOLD,
     CompletenessTrackingRepository,
     build_checklist_status,
+    build_extraction_prompt_feedback,
     build_prompt_feedback,
     build_tracking_snapshot,
     calculate_completeness,
     infer_collected_items_from_pairs,
     infer_collected_items_from_texts,
+    infer_item_coverage_from_pairs,
 )
 from intelligence_worker.qa_extraction import QAPair
 
@@ -106,6 +108,30 @@ def test_infer_collected_items_from_texts_estimation() -> None:
     assert collected == {"budget", "team", "tech_stack", "timeline"}
 
 
+def test_infer_item_coverage_from_pairs_marks_low_confidence_items_partial() -> None:
+    pairs = [
+        QAPair(
+            question_text="使用する技術スタックは？",
+            answer_text="React と TypeScript です",
+            turn_range=[1, 2],
+            confidence=0.9,
+            source_domain="estimation",
+        ),
+        QAPair(
+            question_text="予算感は？",
+            answer_text="300 万円くらいかもしれません",
+            turn_range=[3, 4],
+            confidence=0.55,
+            source_domain="estimation",
+        ),
+    ]
+
+    collected, partial = infer_item_coverage_from_pairs("estimation", pairs)
+
+    assert collected == {"tech_stack"}
+    assert partial == {"budget"}
+
+
 def test_build_tracking_snapshot_sets_missing_topics() -> None:
     snapshot = build_tracking_snapshot(
         domain="estimation",
@@ -118,6 +144,21 @@ def test_build_tracking_snapshot_sets_missing_topics() -> None:
     assert snapshot.overall_completeness == 0.6
     assert snapshot.checklist["timeline"].status == "partial"
     assert snapshot.suggested_next_topics == ("timeline", "team")
+
+
+def test_build_extraction_prompt_feedback_reflects_completion_stage() -> None:
+    snapshot = build_tracking_snapshot(
+        domain="estimation",
+        collected_items={"tech_stack"},
+        turn_count=2,
+        partial_items={"budget"},
+    )
+
+    feedback = build_extraction_prompt_feedback(snapshot)
+
+    assert "feedback_stage=discovery" in feedback
+    assert "completeness_score=0.200" in feedback
+    assert "未収集項目: [budget, scope, timeline, team]" in feedback
 
 
 def test_repository_save_snapshot_upserts_feedback_loop_state() -> None:

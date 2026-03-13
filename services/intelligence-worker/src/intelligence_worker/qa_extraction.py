@@ -8,6 +8,12 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
+from intelligence_worker.completeness_tracker import (
+    build_extraction_prompt_feedback,
+    build_tracking_snapshot,
+    infer_collected_items_from_texts,
+)
+
 
 @dataclass(frozen=True)
 class ConversationTurn:
@@ -32,7 +38,11 @@ class QAPair:
 
 class LLMClient(Protocol):
     def extract_structured(
-        self, *, prompt: str, response_schema: dict[str, Any]
+        self,
+        *,
+        prompt: str,
+        response_schema: dict[str, Any],
+        system_prompt: str | None = None,
     ) -> str: ...
 
 
@@ -109,10 +119,12 @@ class QAPairExtractor:
         re_raise_errors: bool = False,
     ) -> list[QAPair]:
         prompt = self._build_prompt(turns, source_domain)
+        system_prompt = self._build_system_prompt(turns, source_domain)
         try:
             raw = self._llm_client.extract_structured(
                 prompt=prompt,
                 response_schema=QAPairExtractionOutput.model_json_schema(),
+                system_prompt=system_prompt,
             )
             parsed = QAPairExtractionOutput.model_validate_json(raw)
         except Exception as exc:  # noqa: BLE001
@@ -145,8 +157,29 @@ class QAPairExtractor:
             f"[turn={turn.turn_number}] {turn.role}: {turn.content}" for turn in turns
         )
         return QAPAIR_EXTRACTION_PROMPT_TEMPLATE.format(
-            conversation_text=conversation_text + f"\nsource_domain={source_domain}"
+            conversation_text=conversation_text + f"\nsource_domain={source_domain}",
         )
+
+    @staticmethod
+    def _build_system_prompt(
+        turns: list[ConversationTurn],
+        source_domain: str,
+    ) -> str | None:
+        source_texts = [turn.content for turn in turns if turn.role == "user"]
+        if not source_texts:
+            source_texts = [turn.content for turn in turns]
+        try:
+            snapshot = build_tracking_snapshot(
+                domain=source_domain,
+                collected_items=infer_collected_items_from_texts(
+                    source_domain,
+                    source_texts,
+                ),
+                turn_count=len(turns),
+            )
+        except ValueError:
+            return None
+        return build_extraction_prompt_feedback(snapshot)
 
     @staticmethod
     def _to_dataclass(model: QAPairModel) -> QAPair:
