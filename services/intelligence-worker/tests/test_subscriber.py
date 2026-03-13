@@ -6,7 +6,10 @@ import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from intelligence_worker.subscriber import ConversationTurnCompletedSubscriber
+from intelligence_worker.subscriber import (
+    ConversationTurnCompletedSubscriber,
+    ObservationCompletenessUpdatedSubscriber,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -180,3 +183,23 @@ def test_subscriber_nacks_invalid_json_payload() -> None:
     client.callback(bad_message)
     assert bad_message.acked is False
     assert bad_message.nacked is True
+
+
+def test_completeness_subscriber_filters_for_completeness_events() -> None:
+    client = _FakeClient()
+    handled: list[dict[str, object]] = []
+    subscriber = ObservationCompletenessUpdatedSubscriber(
+        client=client,
+        project_id="proj",
+        subscription_id="sub",
+        handler=lambda payload: handled.append(payload),
+    )
+    subscriber.start()
+    assert client.callback is not None
+
+    msg = _FakeMessage(payload={"event_type": "observation.completeness.updated"})
+    client.callback(msg)
+
+    assert handled == [{"event_type": "observation.completeness.updated"}]
+    assert msg.acked is True
+    assert msg.nacked is False

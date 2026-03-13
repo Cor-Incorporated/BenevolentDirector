@@ -20,6 +20,9 @@ from intelligence_worker.main import (
     _shutdown_event,
 )
 from intelligence_worker.qa_extraction import ConversationTurn, QAPair
+from intelligence_worker.requirement_artifacts import (
+    CompletenessUpdatedRequirementArtifactHandler,
+)
 
 # ---------------------------------------------------------------------------
 # _handle_signal
@@ -431,33 +434,22 @@ class _FakeCompletenessRepository:
 
 
 @dataclass
-class _FakeArtifactRepository:
-    loaded: list[dict[str, Any]] = field(default_factory=list)
-    saved: list[dict[str, Any]] = field(default_factory=list)
+class _FakeCompletenessEventPublisher:
+    calls: list[dict[str, Any]] = field(default_factory=list)
 
-    def load_source_chunks(self, **kwargs: Any) -> list[Any]:
-        self.loaded.append(kwargs)
-        return []
-
-    def save_artifact(self, **kwargs: Any) -> int:
-        self.saved.append(kwargs)
-        return 1
+    def publish_snapshot(self, **kwargs: Any) -> str:
+        self.calls.append(kwargs)
+        return "msg-1"
 
 
 @dataclass
-class _FakeArtifactGenerator:
+class _FakeArtifactService:
     calls: list[dict[str, Any]] = field(default_factory=list)
+    version: int | None = 1
 
-    def generate(self, **kwargs: Any) -> Any:
+    def generate_for_case(self, **kwargs: Any) -> int | None:
         self.calls.append(kwargs)
-        return type(
-            "RequirementArtifactDraftLike",
-            (),
-            {
-                "markdown": "# Requirement Artifact",
-                "source_chunks": (),
-            },
-        )()
+        return self.version
 
 
 @dataclass
@@ -499,16 +491,14 @@ class TestTurnCompletedHandler:
         intent_classifier = _FakeIntentClassifier()
         case_type_client = _FakeCaseTypeClient()
         completeness_repository = _FakeCompletenessRepository()
-        artifact_repository = _FakeArtifactRepository()
-        artifact_generator = _FakeArtifactGenerator()
+        completeness_event_publisher = _FakeCompletenessEventPublisher()
         handler = TurnCompletedHandler(
             conversation_repo=conv_repo,
             extractor=extractor,
             intent_classifier=intent_classifier,
             case_type_client=case_type_client,
             completeness_repository=completeness_repository,
-            artifact_repository=artifact_repository,
-            artifact_generator=artifact_generator,
+            completeness_event_publisher=completeness_event_publisher,
         )
 
         handler(
@@ -532,9 +522,10 @@ class TestTurnCompletedHandler:
         ]
         assert len(completeness_repository.calls) == 1
         assert completeness_repository.calls[0]["snapshot"].domain == "estimation"
-        assert len(artifact_repository.loaded) == 1
-        assert len(artifact_repository.saved) == 1
-        assert len(artifact_generator.calls) == 1
+        assert len(completeness_event_publisher.calls) == 1
+        assert completeness_event_publisher.calls[0]["tenant_id"] == "t1"
+        assert completeness_event_publisher.calls[0]["session_id"] == "s1"
+        assert completeness_event_publisher.calls[0]["aggregate_version"] == 2
 
     def test_skips_when_payload_field_missing(self) -> None:
         """Missing envelope payload results in early return."""
@@ -664,3 +655,68 @@ class TestTurnCompletedHandler:
                     "payload": {"session_id": "s1"},
                 }
             )
+
+
+class TestCompletenessUpdatedRequirementArtifactHandler:
+    def test_generates_artifact_when_completeness_meets_threshold(self) -> None:
+        artifact_service = _FakeArtifactService(version=2)
+        handler = CompletenessUpdatedRequirementArtifactHandler(
+            service=artifact_service
+        )
+
+        handler(
+            {
+                "tenant_id": "t1",
+                "aggregate_id": "case-1",
+                "source_domain": "estimation",
+                "payload": {
+                    "session_id": "case-1",
+                    "overall_completeness": 0.8,
+                },
+            }
+        )
+
+        assert len(artifact_service.calls) == 1
+        assert artifact_service.calls[0]["tenant_id"] == "t1"
+        assert artifact_service.calls[0]["case_id"] == "case-1"
+        assert artifact_service.calls[0]["created_by_uid"] == "intelligence-worker"
+
+    def test_skips_generation_below_threshold(self) -> None:
+        artifact_service = _FakeArtifactService()
+        handler = CompletenessUpdatedRequirementArtifactHandler(
+            service=artifact_service
+        )
+
+        handler(
+            {
+                "tenant_id": "t1",
+                "aggregate_id": "case-1",
+                "source_domain": "estimation",
+                "payload": {
+                    "session_id": "case-1",
+                    "overall_completeness": 0.79,
+                },
+            }
+        )
+
+        assert artifact_service.calls == []
+
+    def test_skips_generation_for_non_estimation_domain(self) -> None:
+        artifact_service = _FakeArtifactService()
+        handler = CompletenessUpdatedRequirementArtifactHandler(
+            service=artifact_service
+        )
+
+        handler(
+            {
+                "tenant_id": "t1",
+                "aggregate_id": "case-1",
+                "source_domain": "research",
+                "payload": {
+                    "session_id": "case-1",
+                    "overall_completeness": 0.95,
+                },
+            }
+        )
+
+        assert artifact_service.calls == []

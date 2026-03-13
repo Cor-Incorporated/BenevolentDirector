@@ -621,6 +621,45 @@ paths:
           $ref: "#/components/responses/NotFound"
         "429":
           $ref: "#/components/responses/TooManyRequests"
+    post:
+      operationId: generateRequirementArtifact
+      tags: [estimates]
+      summary: 要件アーティファクト生成を要求
+      parameters:
+        - $ref: "#/components/parameters/tenantIdHeader"
+        - $ref: "#/components/parameters/caseId"
+      responses:
+        "202":
+          description: 生成要求を受理
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequirementArtifactGenerationAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: completeness 閾値未達
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  overall_completeness:
+                    type: number
+                    minimum: 0
+                    maximum: 1
+                  suggested_next_topics:
+                    type: array
+                    items:
+                      type: string
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /v1/cases/{caseId}/search:
     get:
@@ -2125,9 +2164,33 @@ components:
           format: date-time
 
     # ─── Requirement Artifact ───
+    RequirementArtifactCitation:
+      type: object
+      required:
+        [chunk_id, source_id, chunk_index, offset_start, offset_end, content_sha256]
+      properties:
+        chunk_id:
+          type: string
+          format: uuid
+        source_id:
+          type: string
+          format: uuid
+        chunk_index:
+          type: integer
+          minimum: 0
+        offset_start:
+          type: integer
+          minimum: 0
+        offset_end:
+          type: integer
+          minimum: 0
+        content_sha256:
+          type: string
+          minLength: 1
+
     RequirementArtifact:
       type: object
-      required: [id, case_id, version, markdown, status]
+      required: [id, case_id, version, markdown, citations, status]
       properties:
         id:
           type: string
@@ -2144,6 +2207,10 @@ components:
           items:
             type: string
             format: uuid
+        citations:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequirementArtifactCitation"
         status:
           type: string
           enum: [draft, finalized]
@@ -2155,6 +2222,25 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    RequirementArtifactGenerationAccepted:
+      type: object
+      required: [status, case_id, overall_completeness]
+      properties:
+        status:
+          type: string
+          enum: [queued]
+        case_id:
+          type: string
+          format: uuid
+        overall_completeness:
+          type: number
+          minimum: 0
+          maximum: 1
+        suggested_next_topics:
+          type: array
+          items:
+            type: string
 
     RAGSearchResult:
       type: object
