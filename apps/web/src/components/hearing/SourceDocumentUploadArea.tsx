@@ -34,7 +34,9 @@ export function SourceDocumentUploadArea({
     }
 
     const allowedExtensions = ['.pdf', '.zip', '.txt']
-    const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'))
+    const dotIndex = file.name.lastIndexOf('.')
+    const ext = dotIndex > 0 ? file.name.slice(dotIndex).toLowerCase() : ''
+
     if (!allowedExtensions.includes(ext)) {
       setValidationError(`Unsupported file type. Allowed: ${allowedExtensions.join(', ')}`)
       return

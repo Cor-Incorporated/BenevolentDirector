@@ -173,35 +173,45 @@ export function useHearingSession(caseId?: string): UseHearingSessionReturn {
     }
 
     setIsLoading(true)
-    try {
-      const [turnsResult, docsResult, artifactResult, qaResult] =
-        await Promise.allSettled([
-          listConversationTurns(caseId),
-          listSourceDocuments(caseId),
-          getRequirementArtifact(caseId),
-          listObservationQAPairs(caseId),
-        ])
+    const [turnsResult, docsResult, artifactResult, qaResult] =
+      await Promise.allSettled([
+        listConversationTurns(caseId),
+        listSourceDocuments(caseId),
+        getRequirementArtifact(caseId),
+        listObservationQAPairs(caseId),
+      ])
 
-      if (turnsResult.status === 'fulfilled') {
-        setTurns(turnsResult.value)
-      }
-      if (docsResult.status === 'fulfilled') {
-        setSourceDocuments(docsResult.value)
-      }
-      if (artifactResult.status === 'fulfilled') {
-        setRequirementArtifact(artifactResult.value)
-      }
-      if (qaResult.status === 'fulfilled') {
-        setQaPairs(qaResult.value ?? [])
-      }
-      setError(null)
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to load hearing session'
-      setError(message)
-    } finally {
-      setIsLoading(false)
+    if (turnsResult.status === 'fulfilled') {
+      setTurns(turnsResult.value)
+    } else {
+      setError(turnsResult.reason instanceof Error ? turnsResult.reason.message : 'Failed to load conversation turns')
     }
+    if (docsResult.status === 'fulfilled') {
+      setSourceDocuments(docsResult.value)
+    } else {
+      setError(docsResult.reason instanceof Error ? docsResult.reason.message : 'Failed to load source documents')
+    }
+    if (artifactResult.status === 'fulfilled') {
+      setRequirementArtifact(artifactResult.value)
+    } else {
+      setError(artifactResult.reason instanceof Error ? artifactResult.reason.message : 'Failed to load requirement artifact')
+    }
+    if (qaResult.status === 'fulfilled') {
+      setQaPairs(qaResult.value ?? [])
+    } else {
+      setError(qaResult.reason instanceof Error ? qaResult.reason.message : 'Failed to load observation QA pairs')
+    }
+
+    // Clear error only if all settled successfully
+    if (
+      turnsResult.status === 'fulfilled' &&
+      docsResult.status === 'fulfilled' &&
+      artifactResult.status === 'fulfilled' &&
+      qaResult.status === 'fulfilled'
+    ) {
+      setError(null)
+    }
+    setIsLoading(false)
   }, [caseId])
 
   const schedulePostTurnRefreshes = useCallback(() => {
@@ -261,8 +271,6 @@ export function useHearingSession(caseId?: string): UseHearingSessionReturn {
         created_at: new Date().toISOString(),
       }
 
-      // Save current turns for rollback in case sendStreamMessage fails
-      const snapshotTurns = turns
       setTurns((previousTurns) => [...previousTurns, optimisticTurn])
       setError(null)
 
@@ -276,13 +284,13 @@ export function useHearingSession(caseId?: string): UseHearingSessionReturn {
         schedulePostTurnRefreshes()
       } catch (err) {
         // Roll back the optimistic user turn on network/stream failure
-        setTurns(snapshotTurns)
+        setTurns((prev) => prev.filter((t) => t.id !== optimisticTurn.id))
         const message =
           err instanceof Error ? err.message : 'Failed to send message'
         setError(message)
       }
     },
-    [caseId, schedulePostTurnRefreshes, sendStreamMessage, turns],
+    [caseId, schedulePostTurnRefreshes, sendStreamMessage],
   )
 
   const appendUploadedDocument = useCallback(

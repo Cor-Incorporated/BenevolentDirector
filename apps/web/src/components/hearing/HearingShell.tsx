@@ -1,6 +1,5 @@
 import { type ReactNode, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { cn } from '@/lib/cn'
 
 interface HearingShellProps {
   caseId: string
@@ -76,7 +75,7 @@ export function HearingShell({
 
       <div className="grid gap-4 lg:grid-cols-[240px,minmax(0,1fr),320px]">
         <div className="hidden lg:block">{leftPanel}</div>
-        <div className={cn(showLeftPanel || showRightPanel ? 'order-last lg:order-none' : '')}>
+        <div>
           {chatColumn}
         </div>
         <div className="hidden lg:block">{rightPanel}</div>

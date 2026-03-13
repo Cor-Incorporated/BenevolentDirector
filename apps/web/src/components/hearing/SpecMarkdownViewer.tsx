@@ -3,6 +3,9 @@ interface SpecMarkdownViewerProps {
 }
 
 function renderLine(line: string, index: number) {
+  // Key uses index prefix to guarantee uniqueness even when identical lines
+  // appear at different positions. The line-content suffix aids React devtools
+  // debugging but is not relied upon for uniqueness.
   const key = `${index}:${line.slice(0, 40)}`
   if (line.startsWith('### ')) {
     return (
