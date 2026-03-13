@@ -23,17 +23,22 @@ type visitor struct {
 
 // clientIP extracts the real client IP, preferring X-Forwarded-For
 // (set by GKE ingress / Cloud Run proxy) over RemoteAddr.
+//
+// Behind GKE ingress the proxy appends the real client IP as the
+// rightmost entry, so we scan right-to-left and return the first
+// non-private (routable) IP. If every entry is private or only one
+// entry exists, we fall back to RemoteAddr.
 func clientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// X-Forwarded-For: client, proxy1, proxy2 — use leftmost
-		if idx := len(xff); idx > 0 {
-			for i := 0; i < len(xff); i++ {
-				if xff[i] == ',' {
-					return xff[:i]
-				}
+		parts := splitTrimCSV(xff)
+		// Walk right-to-left: the proxy-appended (trustworthy) IP is last.
+		for i := len(parts) - 1; i >= 0; i-- {
+			ip := net.ParseIP(parts[i])
+			if ip != nil && !isPrivateIP(ip) {
+				return parts[i]
 			}
-			return xff
 		}
+		// All entries are private — fall through to RemoteAddr.
 	}
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
 		return xri
@@ -43,6 +48,64 @@ func clientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// splitTrimCSV splits a comma-separated string and trims whitespace
+// from each element.
+func splitTrimCSV(s string) []string {
+	var parts []string
+	start := 0
+	for i := 0; i <= len(s); i++ {
+		if i == len(s) || s[i] == ',' {
+			part := trimSpace(s[start:i])
+			if part != "" {
+				parts = append(parts, part)
+			}
+			start = i + 1
+		}
+	}
+	return parts
+}
+
+// trimSpace trims leading and trailing ASCII spaces.
+func trimSpace(s string) string {
+	for len(s) > 0 && s[0] == ' ' {
+		s = s[1:]
+	}
+	for len(s) > 0 && s[len(s)-1] == ' ' {
+		s = s[:len(s)-1]
+	}
+	return s
+}
+
+// isPrivateIP reports whether ip is in a private / loopback / link-local range.
+func isPrivateIP(ip net.IP) bool {
+	privateRanges := []struct {
+		network *net.IPNet
+	}{
+		{parseCIDR("10.0.0.0/8")},
+		{parseCIDR("172.16.0.0/12")},
+		{parseCIDR("192.168.0.0/16")},
+		{parseCIDR("127.0.0.0/8")},
+		{parseCIDR("::1/128")},
+		{parseCIDR("fc00::/7")},
+		{parseCIDR("fe80::/10")},
+	}
+	for _, r := range privateRanges {
+		if r.network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// parseCIDR is a helper that panics on invalid CIDR (called only with literals).
+func parseCIDR(s string) *net.IPNet {
+	_, network, err := net.ParseCIDR(s)
+	if err != nil {
+		panic("invalid CIDR: " + s)
+	}
+	return network
 }
 
 // RateLimit returns a middleware that limits requests using a fixed-window
@@ -82,11 +145,13 @@ func RateLimit(cfg RateLimitConfig) Middleware {
 			}
 			v.tokens++
 			current := v.tokens
+			resetAt := v.lastReset.Add(cfg.Window)
 			mu.Unlock()
 
 			if current > cfg.RequestsPerWindow {
-				retryAfter := cfg.Window.Seconds()
-				w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter)))
+				remaining := resetAt.Sub(now)
+				retryAfter := max(int(remaining.Seconds())+1, 1) // round up, minimum 1s
+				w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 				http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
 				return
 			}

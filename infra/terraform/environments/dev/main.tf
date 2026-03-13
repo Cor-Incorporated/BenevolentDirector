@@ -184,9 +184,9 @@ module "gke_gpu" {
   enable_spot           = true
   disk_size_gb          = 100
 
-  # Dev: allow access from Cor office + GitHub Actions runners
+  # Dev: VPC-internal only (GHA runners and Cloud Build operate within VPC)
   master_authorized_cidr_blocks = [
-    { cidr_block = "0.0.0.0/0", display_name = "dev-all-access" },
+    { cidr_block = "10.0.0.0/8", display_name = "internal-vpc" },
   ]
 
   # Night/weekend shutdown for cost optimization (Issue #90)

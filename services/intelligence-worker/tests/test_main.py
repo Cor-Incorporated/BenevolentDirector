@@ -59,14 +59,17 @@ class TestGatewayLLMClient:
         assert client._model == "qwen3.5-7b"
 
     def test_extract_structured_delegates_to_request(self) -> None:
-        """extract_structured calls _request with the prompt."""
+        """extract_structured calls _request with the prompt and schema system message."""
         client = GatewayLLMClient("http://gw:8081")
         with patch.object(client, "_request", return_value='{"qa_pairs":[]}') as m:
             result = client.extract_structured(
                 prompt="test prompt",
                 response_schema={"type": "object"},
             )
-        m.assert_called_once_with("test prompt")
+        m.assert_called_once_with(
+            "test prompt",
+            system_message='Return a JSON object conforming to this schema: {"type": "object"}',
+        )
         assert result == '{"qa_pairs":[]}'
 
     def test_request_returns_content_on_success(self) -> None:

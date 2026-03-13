@@ -69,14 +69,19 @@ class GatewayLLMClient:
     def extract_structured(
         self, *, prompt: str, response_schema: dict[str, object]
     ) -> str:
-        del response_schema
-        return self._request(prompt)
+        schema_json = json.dumps(response_schema, ensure_ascii=False)
+        system_msg = f"Return a JSON object conforming to this schema: {schema_json}"
+        return self._request(prompt, system_message=system_msg)
 
-    def _request(self, prompt: str) -> str:
+    def _request(self, prompt: str, system_message: str | None = None) -> str:
+        messages: list[dict[str, str]] = []
+        if system_message:
+            messages.append({"role": "system", "content": system_message})
+        messages.append({"role": "user", "content": prompt})
         payload = json.dumps(
             {
                 "model": self._model,
-                "messages": [{"role": "user", "content": prompt}],
+                "messages": messages,
                 "stream": False,
             }
         ).encode("utf-8")

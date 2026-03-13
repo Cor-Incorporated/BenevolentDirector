@@ -12,6 +12,9 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: vllm-qwen35-9b
+  # NOTE: During night shutdown (Cloud Scheduler scales node pool to 0),
+  # this pod will enter Pending state until nodes are scaled back up.
+  # This is expected behavior — see infra/terraform/modules/gke-gpu/main.tf.
   minReplicas: 1
   maxReplicas: 2
   metrics:
