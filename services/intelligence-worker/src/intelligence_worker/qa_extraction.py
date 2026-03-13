@@ -171,6 +171,9 @@ class QAPairExtractor:
         source_texts = [turn.content for turn in turns if turn.role == "user"]
         if not source_texts:
             source_texts = [turn.content for turn in turns]
+        # TODO: This builds a completeness snapshot independently from
+        # main.py's _persist_completeness, resulting in duplicate computation.
+        # Consider passing a pre-built snapshot to avoid redundant inference.
         try:
             snapshot = build_tracking_snapshot(
                 domain=source_domain,

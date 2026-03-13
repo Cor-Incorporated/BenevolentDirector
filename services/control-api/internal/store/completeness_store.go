@@ -47,7 +47,11 @@ type SQLCompletenessStore struct {
 }
 
 // NewSQLCompletenessStore creates a SQLCompletenessStore backed by the given database.
+// Panics if db is nil, matching the guard in NewCompletenessHandler.
 func NewSQLCompletenessStore(db *sql.DB) *SQLCompletenessStore {
+	if db == nil {
+		panic("db must not be nil")
+	}
 	return &SQLCompletenessStore{db: db}
 }
 
@@ -55,6 +59,11 @@ func NewSQLCompletenessStore(db *sql.DB) *SQLCompletenessStore {
 // Note: the caseID parameter corresponds to the "session_id" column in the
 // completeness_tracking table. The REST layer exposes {caseId} as a path
 // parameter, but the underlying DB schema uses session_id.
+//
+// The query filters on source_domain = 'estimation' because completeness
+// observations are currently only produced by the estimation pipeline.
+// If other domains start writing completeness_tracking rows, consider
+// adding a source_domain parameter or renaming to GetByEstimationDomain.
 func (s *SQLCompletenessStore) GetByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*CompletenessObservation, error) {
 	const query = `
 		SELECT checklist, overall_completeness, suggested_next_topics
