@@ -1,14 +1,22 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  approveProposal,
   caseStatusLabels,
   caseStatusOptions,
   caseTypeLabels,
   caseTypeOptions,
+  createEstimate,
+  createProposal,
   formatDateTime,
+  getEstimate,
   getApiErrorMessage,
   getRequirementArtifact,
   INTERNAL_DATA_CLASSIFICATION,
+  listEstimates,
   listObservationQAPairs,
+  listProposals,
+  rejectProposal,
+  getThreeWayProposal,
   listSourceDocuments,
   uploadSourceDocument,
 } from './api-client'
@@ -213,5 +221,203 @@ describe('hearing API helpers', () => {
         question_text: 'What is the launch window?',
       }),
     ])
+  })
+})
+
+describe('estimate API helpers', () => {
+  it('lists estimates for a case', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: 'estimate-1',
+              case_id: 'case-1',
+              estimate_mode: 'hybrid',
+              status: 'ready',
+            },
+          ],
+          total: 1,
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+
+    await expect(listEstimates('case-1')).resolves.toEqual({
+      data: [
+        expect.objectContaining({
+          id: 'estimate-1',
+          estimate_mode: 'hybrid',
+        }),
+      ],
+      total: 1,
+    })
+  })
+
+  it('creates and fetches estimate detail', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              id: 'estimate-1',
+              case_id: 'case-1',
+              estimate_mode: 'hybrid',
+              status: 'draft',
+            },
+          }),
+          {
+            status: 201,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              id: 'estimate-1',
+              case_id: 'case-1',
+              estimate_mode: 'hybrid',
+              status: 'ready',
+              three_way_proposal: {
+                market_benchmark: { confidence: 'high' },
+              },
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      )
+
+    await expect(
+      createEstimate('case-1', {
+        your_hourly_rate: 12000,
+        region: 'japan',
+        include_market_evidence: true,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: 'estimate-1',
+      }),
+    )
+
+    await expect(getEstimate('case-1', 'estimate-1')).resolves.toEqual(
+      expect.objectContaining({
+        status: 'ready',
+      }),
+    )
+
+    expect(fetchSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('/v1/cases/case-1/estimates'),
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    )
+  })
+
+  it('handles proposal and approval endpoints', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: 'proposal-1',
+                case_id: 'case-1',
+                estimate_id: 'estimate-1',
+                status: 'draft',
+              },
+            ],
+            total: 1,
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              id: 'proposal-1',
+              case_id: 'case-1',
+              estimate_id: 'estimate-1',
+              status: 'draft',
+            },
+          }),
+          {
+            status: 201,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              market_benchmark: { confidence: 'high' },
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              decision: 'approved',
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              decision: 'rejected',
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      )
+
+    await expect(listProposals('case-1')).resolves.toHaveLength(1)
+    await expect(createProposal('case-1', 'estimate-1')).resolves.toEqual(
+      expect.objectContaining({
+        id: 'proposal-1',
+      }),
+    )
+    await expect(
+      getThreeWayProposal('case-1', 'estimate-1'),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        market_benchmark: expect.objectContaining({ confidence: 'high' }),
+      }),
+    )
+    await expect(
+      approveProposal('case-1', 'proposal-1', 'Looks good'),
+    ).resolves.toEqual(expect.objectContaining({ decision: 'approved' }))
+    await expect(
+      rejectProposal('case-1', 'proposal-1', 'Need more evidence'),
+    ).resolves.toEqual(expect.objectContaining({ decision: 'rejected' }))
   })
 })

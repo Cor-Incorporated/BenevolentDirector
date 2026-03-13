@@ -12,6 +12,21 @@ import type {
   SourceDocument,
   UploadSourceDocumentResponse,
 } from '@/types/conversation'
+import type {
+  ApprovalDecision,
+  ApprovalDecisionResponse,
+  CreateEstimateInput,
+  Estimate,
+  EstimateCreateResponse,
+  EstimateDetailResponse,
+  EstimateListResponse,
+  EstimateWithProposal,
+  ProposalListResponse,
+  ProposalSession,
+  ProposalSessionResponse,
+  ThreeWayProposal,
+  ThreeWayProposalResponse,
+} from '@/types/estimate'
 
 export type CaseRecord = components['schemas']['Case']
 export type CaseDetailRecord = components['schemas']['CaseWithDetails']
@@ -310,6 +325,196 @@ export async function* streamMessage(
   } finally {
     reader.releaseLock()
   }
+}
+
+export async function listEstimates(
+  caseId: string,
+  options?: { limit?: number; offset?: number },
+): Promise<{ data: Estimate[]; total: number }> {
+  const queryParams = new URLSearchParams()
+
+  if (typeof options?.limit === 'number') {
+    queryParams.set('limit', String(options.limit))
+  }
+
+  if (typeof options?.offset === 'number') {
+    queryParams.set('offset', String(options.offset))
+  }
+
+  const query = queryParams.toString()
+  const url = `${API_BASE_URL}/v1/cases/${encodeURIComponent(caseId)}/estimates${query ? `?${query}` : ''}`
+  const res = await fetch(url, {
+    headers: buildHeaders({ 'Content-Type': 'application/json' }),
+  })
+
+  if (!res.ok) {
+    const body = await parseJsonResponse<unknown>(res)
+    throw new Error(getApiErrorMessage(body, `API error ${res.status}`))
+  }
+
+  const json = await parseJsonResponse<EstimateListResponse>(res)
+
+  return {
+    data: json?.data ?? [],
+    total: json?.total ?? 0,
+  }
+}
+
+export async function getEstimate(
+  caseId: string,
+  estimateId: string,
+): Promise<EstimateWithProposal | null> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/cases/${encodeURIComponent(caseId)}/estimates/${encodeURIComponent(estimateId)}`,
+    {
+      headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    },
+  )
+
+  if (res.status === 404) {
+    return null
+  }
+
+  if (!res.ok) {
+    const body = await parseJsonResponse<unknown>(res)
+    throw new Error(getApiErrorMessage(body, `API error ${res.status}`))
+  }
+
+  const json = await parseJsonResponse<EstimateDetailResponse>(res)
+  return json?.data ?? null
+}
+
+export async function createEstimate(
+  caseId: string,
+  input: CreateEstimateInput,
+): Promise<Estimate | null> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/cases/${encodeURIComponent(caseId)}/estimates`,
+    {
+      method: 'POST',
+      headers: buildHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(input),
+    },
+  )
+
+  if (!res.ok) {
+    const body = await parseJsonResponse<unknown>(res)
+    throw new Error(getApiErrorMessage(body, `API error ${res.status}`))
+  }
+
+  const json = await parseJsonResponse<EstimateCreateResponse>(res)
+  return json?.data ?? null
+}
+
+export async function getThreeWayProposal(
+  caseId: string,
+  estimateId: string,
+): Promise<ThreeWayProposal | null> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/cases/${encodeURIComponent(caseId)}/estimates/${encodeURIComponent(estimateId)}/three-way-proposal`,
+    {
+      headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    },
+  )
+
+  if (res.status === 404) {
+    return null
+  }
+
+  if (!res.ok) {
+    const body = await parseJsonResponse<unknown>(res)
+    throw new Error(getApiErrorMessage(body, `API error ${res.status}`))
+  }
+
+  const json = await parseJsonResponse<ThreeWayProposalResponse>(res)
+  return json?.data ?? null
+}
+
+export async function listProposals(
+  caseId: string,
+): Promise<ProposalSession[]> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/cases/${encodeURIComponent(caseId)}/proposals`,
+    {
+      headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    },
+  )
+
+  if (!res.ok) {
+    const body = await parseJsonResponse<unknown>(res)
+    throw new Error(getApiErrorMessage(body, `API error ${res.status}`))
+  }
+
+  const json = await parseJsonResponse<ProposalListResponse>(res)
+  return json?.data ?? []
+}
+
+export async function createProposal(
+  caseId: string,
+  estimateId: string,
+): Promise<ProposalSession | null> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/cases/${encodeURIComponent(caseId)}/proposals`,
+    {
+      method: 'POST',
+      headers: buildHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ estimate_id: estimateId }),
+    },
+  )
+
+  if (!res.ok) {
+    const body = await parseJsonResponse<unknown>(res)
+    throw new Error(getApiErrorMessage(body, `API error ${res.status}`))
+  }
+
+  const json = await parseJsonResponse<ProposalSessionResponse>(res)
+  return json?.data ?? null
+}
+
+export async function approveProposal(
+  caseId: string,
+  proposalId: string,
+  comment?: string,
+): Promise<ApprovalDecision | null> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/cases/${encodeURIComponent(caseId)}/proposals/${encodeURIComponent(proposalId)}/approve`,
+    {
+      method: 'POST',
+      headers: buildHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(comment ? { comment } : {}),
+    },
+  )
+
+  if (!res.ok) {
+    const body = await parseJsonResponse<unknown>(res)
+    throw new Error(getApiErrorMessage(body, `API error ${res.status}`))
+  }
+
+  const json = await parseJsonResponse<ApprovalDecisionResponse>(res)
+  return json?.data ?? null
+}
+
+export async function rejectProposal(
+  caseId: string,
+  proposalId: string,
+  reason: string,
+): Promise<ApprovalDecision | null> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/cases/${encodeURIComponent(caseId)}/proposals/${encodeURIComponent(proposalId)}/reject`,
+    {
+      method: 'POST',
+      headers: buildHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ reason }),
+    },
+  )
+
+  if (!res.ok) {
+    const body = await parseJsonResponse<unknown>(res)
+    throw new Error(getApiErrorMessage(body, `API error ${res.status}`))
+  }
+
+  const json = await parseJsonResponse<ApprovalDecisionResponse>(res)
+  return json?.data ?? null
 }
 
 export function formatDateTime(value?: string) {
