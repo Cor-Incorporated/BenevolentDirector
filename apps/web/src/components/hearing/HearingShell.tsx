@@ -45,6 +45,7 @@ export function HearingShell({
             </span>
             <button
               type="button"
+              aria-expanded={showLeftPanel}
               onClick={() => setShowLeftPanel((value) => !value)}
               className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 lg:hidden"
             >
@@ -52,6 +53,7 @@ export function HearingShell({
             </button>
             <button
               type="button"
+              aria-expanded={showRightPanel}
               onClick={() => setShowRightPanel((value) => !value)}
               className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 lg:hidden"
             >

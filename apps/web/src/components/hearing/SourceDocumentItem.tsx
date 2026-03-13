@@ -45,14 +45,20 @@ export function SourceDocumentItem({ document }: SourceDocumentItemProps) {
             <p className="mt-1 text-xs text-slate-500">{meta}</p>
           ) : null}
           {document.source_url ? (
-            <a
-              href={document.source_url}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-2 inline-flex text-xs text-blue-700 hover:text-blue-800"
-            >
-              {document.source_url}
-            </a>
+            /^https?:\/\//.test(document.source_url) ? (
+              <a
+                href={document.source_url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-flex text-xs text-blue-700 hover:text-blue-800"
+              >
+                {document.source_url}
+              </a>
+            ) : (
+              <p className="mt-2 text-xs text-slate-500">
+                {document.source_url}
+              </p>
+            )
           ) : null}
         </div>
         <span

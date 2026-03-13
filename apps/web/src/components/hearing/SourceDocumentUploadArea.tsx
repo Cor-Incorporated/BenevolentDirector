@@ -16,12 +16,30 @@ export function SourceDocumentUploadArea({
   onUploadFile,
   onUploadUrl,
 }: SourceDocumentUploadAreaProps) {
+  const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
+  const ACCEPTED_TYPES = 'application/pdf,.zip,.txt'
+
   const inputRef = useRef<HTMLInputElement>(null)
   const [sourceUrl, setSourceUrl] = useState('')
   const [isDragging, setIsDragging] = useState(false)
+  const [validationError, setValidationError] = useState<string | null>(null)
 
   async function handleFile(file?: File) {
     if (!file) return
+    setValidationError(null)
+
+    if (file.size > MAX_FILE_SIZE) {
+      setValidationError(`File exceeds 50 MB limit (${(file.size / (1024 * 1024)).toFixed(1)} MB)`)
+      return
+    }
+
+    const allowedExtensions = ['.pdf', '.zip', '.txt']
+    const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'))
+    if (!allowedExtensions.includes(ext)) {
+      setValidationError(`Unsupported file type. Allowed: ${allowedExtensions.join(', ')}`)
+      return
+    }
+
     await onUploadFile(file)
     if (inputRef.current) {
       inputRef.current.value = ''
@@ -89,6 +107,7 @@ export function SourceDocumentUploadArea({
         <input
           ref={inputRef}
           type="file"
+          accept={ACCEPTED_TYPES}
           className="hidden"
           onChange={(event) => void handleFile(event.target.files?.[0])}
         />
@@ -118,6 +137,11 @@ export function SourceDocumentUploadArea({
         </div>
       </form>
 
+      {validationError ? (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {validationError}
+        </p>
+      ) : null}
       {notice ? (
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
           {notice}
