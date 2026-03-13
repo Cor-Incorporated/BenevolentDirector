@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+import structlog
 from pydantic import BaseModel, Field
 
 from intelligence_worker.completeness_tracker import (
@@ -13,6 +14,8 @@ from intelligence_worker.completeness_tracker import (
     build_tracking_snapshot,
     infer_collected_items_from_texts,
 )
+
+logger = structlog.get_logger()
 
 
 @dataclass(frozen=True)
@@ -177,7 +180,8 @@ class QAPairExtractor:
                 ),
                 turn_count=len(turns),
             )
-        except ValueError:
+        except ValueError as exc:
+            logger.warning("build_system_prompt_skipped", error=str(exc))
             return None
         return build_extraction_prompt_feedback(snapshot)
 

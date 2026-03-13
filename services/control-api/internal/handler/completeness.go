@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/store"
@@ -39,6 +40,7 @@ func (h *CompletenessHandler) GetByCaseID(w http.ResponseWriter, r *http.Request
 
 	observation, err := h.store.GetByCaseID(r.Context(), tenantID, caseID)
 	if err != nil {
+		log.Printf("completeness: GetByCaseID failed (tenant=%s, case=%s): %v", tenantID, caseID, err)
 		writeJSON(w, http.StatusInternalServerError, errorBody("internal server error"))
 		return
 	}

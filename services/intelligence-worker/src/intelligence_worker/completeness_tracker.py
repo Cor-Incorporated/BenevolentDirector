@@ -227,7 +227,13 @@ def infer_item_coverage_from_pairs(
     domain: str,
     pairs: Iterable[QAPair],
 ) -> tuple[set[str], set[str]]:
-    """Infer collected and partial checklist coverage from extracted QA pairs."""
+    """Infer collected and partial checklist coverage from extracted QA pairs.
+
+    Non-"estimation" domains return empty sets intentionally because pattern
+    matching is only defined for the estimation checklist.  Callers should
+    fall back to ``infer_collected_items_from_texts`` which also applies
+    estimation-only patterns but works on raw transcript strings.
+    """
     if domain != "estimation":
         return set(), set()
 
