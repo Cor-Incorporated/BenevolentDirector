@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import urllib.error
 import urllib.parse
@@ -20,27 +21,50 @@ logger = logging.getLogger(__name__)
 DEFAULT_DATA_CLASSIFICATION = "restricted"
 DEFAULT_QWEN_MODEL = "qwen3.5-9b"
 
-_EXTRACTION_PROMPT = """\
+_EXTRACTION_PROMPT_BASE = """\
 You are an intake assistant that identifies missing information in a \
 software development request.
 
-Required fields (check if present):
-- project_scope: what the project or feature is about
-- budget: approximate budget or cost expectation
-- timeline: desired deadline or schedule
-- tech_stack: programming languages, frameworks, or infrastructure
-- team_size: team composition or headcount
+{field_section}
 
 Given the conversation so far, identify which fields are STILL MISSING
 and generate a targeted follow-up question for each.
 
 Return JSON only:
-{
+{{
   "missing_topics": ["field_name", ...],
   "follow_up_questions": ["question text", ...],
   "confidence": 0.0
-}
+}}
 """
+
+_FIELDS_ALL = """\
+Required fields (check if present):
+- project_scope: what the project or feature is about
+- budget: approximate budget or cost expectation
+- timeline: desired deadline or schedule
+- tech_stack: programming languages, frameworks, or infrastructure
+- team_size: team composition or headcount"""
+
+_FIELDS_BUG_FIX = """\
+Required fields (check if present):
+- project_scope: what the bug or issue is about, including reproduction steps
+- timeline: desired deadline or urgency
+- tech_stack: programming languages, frameworks, or infrastructure
+
+Note: budget and team_size are NOT required for bug reports / fix requests."""
+
+# Intent types that use the reduced field set
+_BUG_FIX_INTENTS = frozenset({"bug_report", "fix_request"})
+
+
+def _build_extraction_prompt(intent: str | None = None) -> str:
+    """Build the system prompt with intent-appropriate required fields."""
+    if intent and intent in _BUG_FIX_INTENTS:
+        field_section = _FIELDS_BUG_FIX
+    else:
+        field_section = _FIELDS_ALL
+    return _EXTRACTION_PROMPT_BASE.format(field_section=field_section)
 
 
 @dataclass(frozen=True)
@@ -181,7 +205,7 @@ class GatewayMissingInfoExtractor:
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": _EXTRACTION_PROMPT},
+                {"role": "system", "content": _build_extraction_prompt(intent)},
                 {"role": "user", "content": user_content},
             ],
             "temperature": 0.1,
@@ -202,7 +226,7 @@ class GatewayMissingInfoExtractor:
         try:
             response = urllib.request.urlopen(request, timeout=self.timeout_seconds)
         except urllib.error.URLError as exc:
-            logger.error("llm_gateway_missing_info_failed", error=str(exc))
+            logger.error("llm_gateway_missing_info_failed", extra={"error": str(exc)})
             raise
         with response:
             body = json.loads(response.read(1_048_576).decode("utf-8"))
@@ -228,13 +252,13 @@ class RuleBasedMissingInfoExtractor:
 
         Args:
             raw_text: Unstructured request text from the user.
-            intent: Classified intent (unused in rule-based path).
+            intent: Classified intent label; bug/fix intents skip
+                budget and team_size fields.
 
         Returns:
             MissingInfoResult with detected gaps.
         """
-        del intent  # unused in rule-based path
-        fields = _extract_fields_rule_based(raw_text)
+        fields = _extract_fields_rule_based(raw_text, intent=intent)
         return MissingInfoResult(
             missing_topics=tuple(f.field_name for f in fields),
             follow_up_questions=tuple(f.question for f in fields),
@@ -258,17 +282,21 @@ class MissingInfoExtractor:
         self._gateway_client = gateway_client
         self._fallback = fallback or RuleBasedMissingInfoExtractor()
 
-    def extract(self, raw_text: str) -> list[MissingField]:
+    def extract(
+        self, raw_text: str, *, intent: str | None = None
+    ) -> list[MissingField]:
         """Identify missing fields in the given text.
 
         Args:
             raw_text: Unstructured request text from the user.
+            intent: Classified intent label; bug/fix intents skip
+                budget and team_size fields.
 
         Returns:
             List of MissingField objects for fields not detected
             in the text, ordered by priority (high first).
         """
-        return _extract_fields_rule_based(raw_text)
+        return _extract_fields_rule_based(raw_text, intent=intent)
 
     def extract_missing(
         self, raw_text: str, *, intent: str | None = None
@@ -305,17 +333,26 @@ class MissingInfoExtractor:
         return self._fallback.extract_missing(raw_text, intent=intent)
 
 
-def _extract_fields_rule_based(raw_text: str) -> list[MissingField]:
+def _extract_fields_rule_based(
+    raw_text: str, *, intent: str | None = None
+) -> list[MissingField]:
     """Scan text for field indicators and return missing fields."""
+    skip_fields: frozenset[str] = frozenset()
+    if intent and intent in _BUG_FIX_INTENTS:
+        skip_fields = frozenset({"budget", "team_size"})
+
     if not raw_text or not raw_text.strip():
         logger.warning("Empty text received for missing info extraction")
         return [
             MissingField(field_name=name, question=question, priority=priority)
             for name, _, question, priority in _FIELD_DETECTORS
+            if name not in skip_fields
         ]
 
     missing: list[MissingField] = []
     for name, pattern, question, priority in _FIELD_DETECTORS:
+        if name in skip_fields:
+            continue
         if not pattern.search(raw_text):
             missing.append(
                 MissingField(field_name=name, question=question, priority=priority)
@@ -393,5 +430,7 @@ def _clamp01(value: object) -> float:
     try:
         numeric = float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
+        return 0.0
+    if math.isnan(numeric) or math.isinf(numeric):
         return 0.0
     return max(0.0, min(1.0, numeric))
