@@ -59,7 +59,6 @@ func (m *mockRAGSearchStore) SearchSimilarChunks(_ context.Context, tenantID uui
 	return append([]store.RAGSearchResult(nil), m.results...), nil
 }
 
-
 // NOTE: mockRAGEmbedder.callCount and mockRAGSearchStore.calls are not thread-safe.
 // If t.Parallel() is added to subtests, these fields must use sync/atomic or a mutex.
 type mockRAGEmbedder struct {
@@ -277,9 +276,6 @@ func TestRAGSearchHandlerSearchHTTPResponses(t *testing.T) {
 			embedder:       &mockRAGEmbedder{err: errors.New("gateway down")},
 			wantStatus:     http.StatusBadGateway,
 			wantError:      "failed to create query embedding",
-			wantTopK:       defaultRAGTopK,
-			wantTenantID:   tenantID,
-			wantCaseID:     &caseID,
 			wantEmbedInput: "policy",
 			wantEmbedCalls: 1,
 			wantStoreCalls: 0,
@@ -356,11 +352,11 @@ func TestRAGSearchHandlerSearchHTTPResponses(t *testing.T) {
 				if call.tenantID != tt.wantTenantID {
 					t.Fatalf("tenantID = %v, want %v", call.tenantID, tt.wantTenantID)
 				}
-			if tt.wantCaseID != nil {
-				if call.caseID == nil || *call.caseID != *tt.wantCaseID {
-					t.Fatalf("caseID = %v, want %v", call.caseID, tt.wantCaseID)
+				if tt.wantCaseID != nil {
+					if call.caseID == nil || *call.caseID != *tt.wantCaseID {
+						t.Fatalf("caseID = %v, want %v", call.caseID, tt.wantCaseID)
+					}
 				}
-			}
 				if call.topK != tt.wantTopK {
 					t.Fatalf("topK = %d, want %d", call.topK, tt.wantTopK)
 				}
@@ -424,7 +420,7 @@ func TestRAGSearchHandlerSearchTenantIsolation(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/v1/cases/"+caseID.String()+"/search?q=policy", nil)
 			req.Header.Set("X-Tenant-ID", tt.tenantHeader)
@@ -443,23 +439,17 @@ func TestRAGSearchHandlerSearchTenantIsolation(t *testing.T) {
 			if body.Data[0].Content != tt.wantContent {
 				t.Fatalf("content = %q, want %q", body.Data[0].Content, tt.wantContent)
 			}
+
+			// Assert tenant isolation per subtest using deterministic call index
+			if embedder.callCount != i+1 {
+				t.Fatalf("embedder calls = %d, want %d", embedder.callCount, i+1)
+			}
+			if len(storeMock.calls) != i+1 {
+				t.Fatalf("store calls = %d, want %d", len(storeMock.calls), i+1)
+			}
+			if storeMock.calls[i].tenantID != tt.wantTenantID {
+				t.Fatalf("tenantID = %v, want %v", storeMock.calls[i].tenantID, tt.wantTenantID)
+			}
 		})
-	}
-
-
-	// NOTE: These post-loop assertions on the shared storeMock and embedder rely on
-	// sequential subtest execution order (tenant a runs before tenant b). Do not add
-	// t.Parallel() to the subtests above without restructuring these checks.
-	if embedder.callCount != 2 {
-		t.Fatalf("embedder calls = %d, want 2", embedder.callCount)
-	}
-	if len(storeMock.calls) != 2 {
-		t.Fatalf("store calls = %d, want 2", len(storeMock.calls))
-	}
-	if storeMock.calls[0].tenantID != tenantA {
-		t.Fatalf("first tenantID = %v, want %v", storeMock.calls[0].tenantID, tenantA)
-	}
-	if storeMock.calls[1].tenantID != tenantB {
-		t.Fatalf("second tenantID = %v, want %v", storeMock.calls[1].tenantID, tenantB)
 	}
 }
