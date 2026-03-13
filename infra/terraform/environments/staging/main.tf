@@ -93,6 +93,36 @@ module "storage" {
 }
 
 # -----------------------------------------------------
+# Secrets (Secret Manager)
+# -----------------------------------------------------
+module "secrets" {
+  source = "../../modules/secrets"
+
+  project_id  = var.project_id
+  environment = "staging"
+
+  secret_names = [
+    "control-api-database-url",
+    "cloudsql-db-password",
+    "anthropic-api-key",
+    "brave-search-api-key",
+    "xai-api-key",
+    "firebase-api-key",
+    "firebase-service-account-key",
+    "github-token",
+    "github-app-private-key",
+    "github-app-id",
+    "github-app-installation-id",
+    "control-api-token",
+    "perplexity-api-key",
+    "gemini-api-key",
+    "clerk-secret-key",
+    "supabase-service-role-key",
+    "linear-api-key",
+  ]
+}
+
+# -----------------------------------------------------
 # Pub/Sub
 # -----------------------------------------------------
 module "pubsub" {
@@ -111,10 +141,10 @@ module "pubsub" {
     "market-events",
   ]
 
-  ack_deadline_seconds = 60
+  ack_deadline_seconds  = 60
   max_delivery_attempts = 5
-  minimum_backoff = "10s"
-  maximum_backoff = "300s"
+  minimum_backoff       = "10s"
+  maximum_backoff       = "300s"
 }
 
 # -----------------------------------------------------
@@ -140,11 +170,15 @@ module "iam" {
   project_id  = var.project_id
   environment = "staging"
 
-  pubsub_topic_ids             = module.pubsub.topic_ids
-  pubsub_subscription_ids      = module.pubsub.subscription_ids
-  pubsub_dead_letter_topic_ids = module.pubsub.dead_letter_topic_ids
-  source_documents_bucket_name = module.storage.source_documents_bucket_name
-  exports_bucket_name          = module.storage.exports_bucket_name
+  pubsub_topic_ids               = module.pubsub.topic_ids
+  pubsub_subscription_ids        = module.pubsub.subscription_ids
+  pubsub_dead_letter_topic_ids   = module.pubsub.dead_letter_topic_ids
+  source_documents_bucket_name   = module.storage.source_documents_bucket_name
+  exports_bucket_name            = module.storage.exports_bucket_name
+  control_api_secret_ids         = values(module.secrets.secret_ids)
+  intelligence_worker_secret_ids = values(module.secrets.secret_ids)
+  llm_gateway_secret_ids         = values(module.secrets.secret_ids)
+  web_deploy_secret_ids          = values(module.secrets.secret_ids)
 }
 
 # -----------------------------------------------------

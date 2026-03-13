@@ -115,3 +115,43 @@ resource "google_storage_bucket_iam_member" "web_deploy_exports_reader" {
   role   = "roles/storage.objectViewer"
   member = "serviceAccount:${google_service_account.web_deploy.email}"
 }
+
+# =============================================================
+# Secret Manager permissions
+# - Grant each runtime service account access to configured secrets
+# =============================================================
+resource "google_secret_manager_secret_iam_member" "control_api_secret_accessor" {
+  for_each = toset(var.control_api_secret_ids)
+
+  project   = var.project_id
+  secret_id = each.value
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.control_api.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "intelligence_worker_secret_accessor" {
+  for_each = toset(var.intelligence_worker_secret_ids)
+
+  project   = var.project_id
+  secret_id = each.value
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.intelligence_worker.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "llm_gateway_secret_accessor" {
+  for_each = toset(var.llm_gateway_secret_ids)
+
+  project   = var.project_id
+  secret_id = each.value
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.llm_gateway.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "web_deploy_secret_accessor" {
+  for_each = toset(var.web_deploy_secret_ids)
+
+  project   = var.project_id
+  secret_id = each.value
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.web_deploy.email}"
+}
