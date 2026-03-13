@@ -444,7 +444,7 @@ class _FakeConversationRepo:
     @classmethod
     def for_case(
         cls, *, case_id: str, turns: list[ConversationTurn]
-    ) -> "_FakeConversationRepo":
+    ) -> _FakeConversationRepo:
         repo = cls()
         repo._turns_by_case[case_id] = list(turns)
         return repo
