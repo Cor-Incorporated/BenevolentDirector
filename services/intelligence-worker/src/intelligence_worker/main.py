@@ -41,6 +41,7 @@ from intelligence_worker.dead_letter_events import (
     DeadLetterRetryLoop,
     DeadLetterRetryProcessor,
 )
+from intelligence_worker.estimates.runtime import start_estimate_subscriber
 from intelligence_worker.market.runtime import start_market_subscriber
 from intelligence_worker.observation_events import CompletenessUpdatedPublisher
 from intelligence_worker.qa_extraction import (
@@ -688,6 +689,14 @@ def run() -> None:
     if market_runtime is not None:
         futures.append(market_runtime.future)
 
+    estimate_runtime = start_estimate_subscriber(
+        config=config,
+        subscriber_client=subscriber_client,
+        conn_manager=conn_manager,
+    )
+    if estimate_runtime is not None:
+        futures.append(estimate_runtime.future)
+
     try:
         _shutdown_event.wait()
     finally:
@@ -697,6 +706,8 @@ def run() -> None:
         subscriber_client.close()
         if market_runtime is not None:
             market_runtime.close()
+        if estimate_runtime is not None:
+            estimate_runtime.close()
         publisher_client.close()
         conn_manager.close_all()
 

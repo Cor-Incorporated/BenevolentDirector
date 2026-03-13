@@ -64,6 +64,10 @@ class EstimateRuntime:
     future: StreamingPullFuture
     subscription_id: str
 
+    def close(self) -> None:
+        """Cancel the streaming pull future."""
+        self.future.cancel()
+
 
 def start_estimate_subscriber(
     *,
