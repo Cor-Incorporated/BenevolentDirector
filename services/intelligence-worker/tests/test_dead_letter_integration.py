@@ -204,7 +204,16 @@ class _FakeCursor:
         sql_lower = sql.lower()
 
         if "insert into dead_letter_events" in sql_lower:
-            tenant_id, event_id, event_type, reason, max_retries, payload_json = params
+            # SQL positional params: tenant_id, event_id, event_type,
+            #                        reason, max_retries, payload_json
+            (
+                tenant_id,  # %s 1: tenant_id
+                event_id,  # %s 2: event_id
+                event_type,  # %s 3: event_type
+                reason,  # %s 4: reason
+                max_retries,  # %s 5: max_retries
+                payload_json,  # %s 6: original_payload (JSON)
+            ) = params
             self.db.insert_or_update_failure(
                 tenant_id=tenant_id,
                 event_id=event_id,
@@ -237,8 +246,14 @@ class _FakeCursor:
             return
 
         if "set retry_count = retry_count + 1" in sql_lower:
-            # params: (occurred_at, exceeded_reason, reason, resolved_at, entry_id)
-            occurred_at, _exceeded_reason, reason, _resolved_at, entry_id = params
+            # SQL positional params for retry failure UPDATE:
+            (
+                occurred_at,  # %s 1: last_retried_at
+                _exceeded_reason,  # %s 2: exceeded reason (unused in fake)
+                reason,  # %s 3: reason
+                _resolved_at,  # %s 4: resolved_at (unused in fake)
+                entry_id,  # %s 5: WHERE id = %s
+            ) = params
             self.db.mark_retry_failure(
                 entry_id=entry_id,
                 reason=reason,
@@ -418,19 +433,26 @@ class _FakeStopEvent:
 
 @dataclass
 class _FakeConversationRepo:
-    """Single-case fake: returns the same turns regardless of case_id.
+    """Fake conversation repository keyed by case_id.
 
-    Tests using this fake only seed one case, so case_id filtering is not
-    exercised. If multi-case scenarios are added, this fake must be extended
-    to a dict keyed by case_id.
+    Stores turns per case_id so that a wrong case_id would return an empty
+    list and cause assertion failures in tests.
     """
 
-    turns: list[ConversationTurn]
+    _turns_by_case: dict[str, list[ConversationTurn]] = field(default_factory=dict)
+
+    @classmethod
+    def for_case(
+        cls, *, case_id: str, turns: list[ConversationTurn]
+    ) -> "_FakeConversationRepo":
+        repo = cls()
+        repo._turns_by_case[case_id] = list(turns)
+        return repo
 
     def load_turns(self, *, tenant_id: str, case_id: str) -> list[ConversationTurn]:
-        assert tenant_id
-        assert case_id
-        return list(self.turns)
+        assert tenant_id, "tenant_id must not be empty"
+        assert case_id, "case_id must not be empty"
+        return list(self._turns_by_case.get(case_id, []))
 
 
 @dataclass
@@ -634,7 +656,8 @@ def test_pubsub_handler_failure_is_acked_and_can_be_replayed_from_dlq() -> None:
     handler = TurnCompletedHandler(
         conversation_repo=cast(
             "Any",
-            _FakeConversationRepo(
+            _FakeConversationRepo.for_case(
+                case_id="case-1",
                 turns=[
                     ConversationTurn(
                         role="user",
@@ -646,7 +669,7 @@ def test_pubsub_handler_failure_is_acked_and_can_be_replayed_from_dlq() -> None:
                         content="どの機能が必要ですか",
                         turn_number=2,
                     ),
-                ]
+                ],
             ),
         ),
         extractor=extractor,
@@ -750,22 +773,28 @@ def test_retry_loop_processes_due_event_before_stop() -> None:
     def _succeed(payload: dict[str, Any]) -> None:
         handled.append(payload)
 
-    processor = DeadLetterRetryProcessor(store=store, retry_handler=_succeed)
+    stop = threading.Event()
+    processed = threading.Event()
+
+    original_succeed = _succeed
+
+    def _succeed_and_signal(payload: dict[str, Any]) -> None:
+        original_succeed(payload)
+        processed.set()
+
+    processor = DeadLetterRetryProcessor(store=store, retry_handler=_succeed_and_signal)
     loop = DeadLetterRetryLoop(processor=processor, poll_interval_seconds=0.01)
 
-    stop = threading.Event()
-
-    def _run_and_stop() -> None:
+    def _run_loop() -> None:
         loop.run(stop)
 
-    t = threading.Thread(target=_run_and_stop, daemon=True)
+    t = threading.Thread(target=_run_loop, daemon=True)
     t.start()
 
-    # Give the loop time to process the due event, then signal stop.
+    # Wait for the event to be processed, then signal stop.
+    assert processed.wait(timeout=2.0), "retry loop did not process the event in time"
+    stop.set()
     t.join(timeout=2.0)
-    if t.is_alive():
-        stop.set()
-        t.join(timeout=2.0)
 
     assert len(handled) >= 1
     assert handled[0]["event_id"] == "evt-loop"
