@@ -427,6 +427,13 @@ class _FakePubSubClient:
         )
         return _FakeFuture()
 
+    def subscribe(
+        self,
+        subscription: str,
+        callback: Any,
+    ) -> _FakeFuture:
+        return _FakeFuture()
+
     def close(self) -> None:
         self.closed = True
 
@@ -837,6 +844,7 @@ def test_run_cancels_subscription_and_closes_resources_on_shutdown() -> None:
         pubsub_project_id="project-1",
         pubsub_subscription="conversation-turn-completed",
         market_pubsub_subscription="market-research-requested",
+        estimate_pubsub_subscription="estimate-requested-sub",
         grok_api_key=None,
         brave_api_key=None,
         perplexity_api_key=None,

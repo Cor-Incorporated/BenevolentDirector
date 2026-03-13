@@ -55,6 +55,7 @@ class TestLoadConfig:
             pubsub_project_id="p",
             pubsub_subscription="s",
             market_pubsub_subscription="market-sub",
+            estimate_pubsub_subscription="estimate-events-sub",
             pubsub_topic="conversation-turns",
             database_url="d",
             llm_gateway_url="http://localhost:8081",
