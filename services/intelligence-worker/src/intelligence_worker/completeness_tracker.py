@@ -12,6 +12,8 @@ import structlog
 from psycopg2 import errors as psycopg_errors  # type: ignore[import-untyped]
 
 COMPLETENESS_THRESHOLD = 0.8
+PARTIAL_COMPLETENESS_CONFIDENCE = 0.75
+FOLLOW_UP_COMPLETENESS_THRESHOLD = 0.4
 
 logger = structlog.get_logger()
 
@@ -200,10 +202,16 @@ def build_tracking_snapshot(
         collected_items,
         partial_items=partial_items,
     )
+    partial_topics = tuple(
+        item for item, status in checklist.items() if status.status == "partial"
+    )
+    missing_topics = tuple(
+        item for item, status in checklist.items() if status.status == "missing"
+    )
     return CompletenessTrackingSnapshot(
         domain=domain,
         checklist=checklist,
-        suggested_next_topics=result.missing_items,
+        suggested_next_topics=partial_topics + missing_topics,
         overall_completeness=result.completeness,
         turn_count=turn_count,
     )
@@ -214,6 +222,70 @@ def build_prompt_feedback(missing_items: tuple[str, ...]) -> str:
     if not missing_items:
         return "未収集項目: []"
     return f"未収集項目: [{', '.join(missing_items)}]"
+
+
+def infer_item_coverage_from_pairs(
+    domain: str,
+    pairs: Iterable[QAPair],
+) -> tuple[set[str], set[str]]:
+    """Infer collected and partial checklist coverage from extracted QA pairs.
+
+    Non-"estimation" domains return empty sets intentionally because pattern
+    matching is only defined for the estimation checklist.  Callers should
+    fall back to ``infer_collected_items_from_texts`` which also applies
+    estimation-only patterns but works on raw transcript strings.
+    """
+    if domain != "estimation":
+        return set(), set()
+
+    collected: set[str] = set()
+    partial: set[str] = set()
+    for pair in pairs:
+        text = f"{pair.question_text} {pair.answer_text}".lower()
+        for item, patterns in _ESTIMATION_ITEM_PATTERNS.items():
+            if not any(pattern in text for pattern in patterns):
+                continue
+            if pair.confidence >= PARTIAL_COMPLETENESS_CONFIDENCE:
+                collected.add(item)
+                partial.discard(item)
+            elif item not in collected:
+                partial.add(item)
+    return collected, partial
+
+
+def build_extraction_prompt_feedback(
+    snapshot: CompletenessTrackingSnapshot,
+) -> str:
+    """Build dynamic extraction guidance from the latest completeness state."""
+    if snapshot.overall_completeness >= COMPLETENESS_THRESHOLD:
+        stage = "completion"
+        guidance = (
+            "Most checklist items are already covered. Avoid repeating settled facts "
+            "and only surface unresolved or weakly-supported topics."
+        )
+    elif snapshot.overall_completeness >= FOLLOW_UP_COMPLETENESS_THRESHOLD:
+        stage = "follow_up"
+        guidance = (
+            "The conversation is partially complete. Prioritize unresolved checklist "
+            "topics and keep tentative answers distinguishable from confirmed facts."
+        )
+    else:
+        stage = "discovery"
+        guidance = (
+            "The conversation is still early. Focus on extracting foundational "
+            "requirements and preserve the biggest information gaps."
+        )
+
+    feedback_line = build_prompt_feedback(snapshot.suggested_next_topics)
+    return "\n".join(
+        (
+            "Completeness feedback:",
+            f"- completeness_score={snapshot.overall_completeness:.3f}",
+            f"- feedback_stage={stage}",
+            f"- {guidance}",
+            f"- {feedback_line}",
+        )
+    )
 
 
 class CompletenessTrackingRepository:

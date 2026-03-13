@@ -19,10 +19,18 @@ from intelligence_worker.qa_extraction import (
 class _FakeLLM:
     response_text: str
     should_fail: bool = False
+    last_prompt: str = ""
+    last_system_prompt: str | None = None
 
     def extract_structured(
-        self, *, prompt: str, response_schema: dict[str, Any]
+        self,
+        *,
+        prompt: str,
+        response_schema: dict[str, Any],
+        system_prompt: str | None = None,
     ) -> str:
+        self.last_prompt = prompt
+        self.last_system_prompt = system_prompt
         assert "qa_pairs" in response_schema.get("properties", {})
         assert "source_domain=" in prompt
         if self.should_fail:
@@ -86,6 +94,45 @@ def test_extract_and_persist_success() -> None:
     assert pairs[0].confidence == 0.86
     assert repo.saved_pairs is not None and len(repo.saved_pairs) == 1
     assert dlq.calls == []
+
+
+def test_extract_and_persist_injects_completeness_feedback_into_system_prompt() -> None:
+    llm = _FakeLLM(
+        response_text=(
+            '{"qa_pairs":[{"question_text":"技術スタックは?","answer_text":"React",'
+            '"turn_range":[1,2],"confidence":0.9,"source_domain":"estimation"}]}'
+        )
+    )
+    repo = _FakeRepo()
+    dlq = _FakeDLQ(calls=[])
+    extractor = QAPairExtractor(
+        llm_client=llm, repository=repo, dead_letter_publisher=dlq
+    )
+
+    extractor.extract_and_persist(
+        tenant_id="t1",
+        case_id="c1",
+        session_id="s1",
+        source_domain="estimation",
+        turns=[
+            ConversationTurn(
+                role="user",
+                content="技術スタックは React と TypeScript です",
+                turn_number=1,
+            ),
+            ConversationTurn(
+                role="assistant",
+                content="承知しました。予算と納期も確認したいです",
+                turn_number=2,
+            ),
+        ],
+    )
+
+    assert llm.last_system_prompt is not None
+    assert "Completeness feedback:" in llm.last_system_prompt
+    assert "completeness_score=0.200" in llm.last_system_prompt
+    assert "未収集項目: [scope, timeline, budget, team]" in llm.last_system_prompt
+    assert "Completeness feedback:" not in llm.last_prompt
 
 
 def test_extract_and_persist_failure_goes_to_dlq() -> None:

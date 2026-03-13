@@ -75,6 +75,24 @@ class TestGatewayLLMClient:
         )
         assert result == '{"qa_pairs":[]}'
 
+    def test_extract_structured_prepends_dynamic_system_prompt(self) -> None:
+        client = GatewayLLMClient("http://gw:8081")
+        with patch.object(client, "_request", return_value='{"qa_pairs":[]}') as m:
+            client.extract_structured(
+                prompt="test prompt",
+                response_schema={"type": "object"},
+                system_prompt="Completeness feedback:\n- completeness_score=0.200",
+            )
+
+        expected_msg = (
+            "Completeness feedback:\n- completeness_score=0.200\n\n"
+            'Return a JSON object conforming to this schema: {"type": "object"}'
+        )
+        m.assert_called_once_with(
+            "test prompt",
+            system_message=expected_msg,
+        )
+
     def test_request_returns_content_on_success(self) -> None:
         """Valid gateway response returns message content."""
         client = GatewayLLMClient("http://gw:8081")

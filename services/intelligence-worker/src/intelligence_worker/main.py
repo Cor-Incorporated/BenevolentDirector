@@ -30,8 +30,8 @@ from intelligence_worker.completeness_tracker import (
     CompletenessTrackingRepository,
     build_tracking_snapshot,
     calculate_completeness,
-    infer_collected_items_from_pairs,
     infer_collected_items_from_texts,
+    infer_item_coverage_from_pairs,
 )
 from intelligence_worker.config import load_config
 from intelligence_worker.db import RLSConnectionManager
@@ -73,10 +73,20 @@ class GatewayLLMClient:
         self._model = model
 
     def extract_structured(
-        self, *, prompt: str, response_schema: dict[str, object]
+        self,
+        *,
+        prompt: str,
+        response_schema: dict[str, object],
+        system_prompt: str | None = None,
     ) -> str:
         schema_json = json.dumps(response_schema, ensure_ascii=False)
-        system_msg = f"Return a JSON object conforming to this schema: {schema_json}"
+        system_parts = []
+        if system_prompt:
+            system_parts.append(system_prompt)
+        system_parts.append(
+            f"Return a JSON object conforming to this schema: {schema_json}"
+        )
+        system_msg = "\n\n".join(system_parts)
         return self._request(prompt, system_message=system_msg)
 
     def _request(self, prompt: str, system_message: str | None = None) -> str:
@@ -513,19 +523,25 @@ class TurnCompletedHandler:
         if self._completeness_repository is None:
             return
         try:
-            collected_items = infer_collected_items_from_pairs(
+            collected_items, partial_items = infer_item_coverage_from_pairs(
                 context.source_domain,
                 pairs,
             )
-            if not collected_items:
+            if not collected_items and not partial_items:
+                source_texts = [
+                    turn.content for turn in context.turns if turn.role == "user"
+                ]
+                if not source_texts:
+                    source_texts = [turn.content for turn in context.turns]
                 collected_items = infer_collected_items_from_texts(
                     context.source_domain,
-                    [turn.content for turn in context.turns],
+                    source_texts,
                 )
             snapshot = build_tracking_snapshot(
                 domain=context.source_domain,
                 collected_items=collected_items,
                 turn_count=len(context.turns),
+                partial_items=partial_items,
             )
             self._completeness_repository.save_snapshot(
                 tenant_id=context.tenant_id,
