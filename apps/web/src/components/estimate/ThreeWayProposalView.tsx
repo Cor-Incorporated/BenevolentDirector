@@ -212,7 +212,7 @@ export function ThreeWayProposalView({ proposal }: ThreeWayProposalViewProps) {
               <ul className="space-y-1">
                 {ourProposal.competitive_advantages.map((advantage, index) => (
                   <li
-                    key={String(index)}
+                    key={advantage}
                     className="text-sm text-slate-600"
                   >
                     <span className="mr-1.5 text-emerald-500">&#x2022;</span>

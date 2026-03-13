@@ -23,7 +23,7 @@ function RiskFlags({ flags }: { flags: string[] }) {
       <ul className="space-y-1">
         {flags.map((flag, index) => (
           <li
-            key={String(index)}
+            key={flag}
             className="text-sm text-amber-700"
           >
             <span className="mr-1.5 text-amber-500">&#x26A0;</span>
@@ -301,16 +301,7 @@ export function EstimateDetail() {
 
       {/* Approval actions */}
       {estimate.status === 'ready' ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-slate-950">
-            Approval decision
-          </h2>
-          <ApprovalActions
-            caseId={caseId}
-            estimateId={estimateId}
-            onDecision={() => void refresh()}
-          />
-        </section>
+        <ApprovalActions caseId={caseId} estimateId={estimateId} onDecision={() => void refresh()} />
       ) : null}
     </main>
   )
