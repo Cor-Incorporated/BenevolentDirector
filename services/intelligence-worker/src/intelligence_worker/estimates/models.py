@@ -67,7 +67,8 @@ class EstimateQuery:
         merged = dict(nested) if isinstance(nested, dict) else dict(payload)
         for name in ("tenant_id", "case_id", "estimate_id"):
             value = payload.get(name)
-            if (name not in merged or not merged[name]) and isinstance(value, str) and value:
+            is_missing = name not in merged or not merged[name]
+            if is_missing and isinstance(value, str) and value:
                 merged[name] = value
 
         case_id = merged.get("case_id")
