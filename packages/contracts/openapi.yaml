@@ -2263,6 +2263,7 @@ components:
         context:
           type: string
           description: プロジェクトの概要説明
+          maxLength: 10000
         region:
           type: string
           default: japan
@@ -2276,6 +2277,9 @@ components:
     EvidenceFragment:
       type: object
       properties:
+        id:
+          type: string
+          format: uuid
         provider:
           type: string
           enum: [grok, brave, perplexity, gemini]
@@ -2295,10 +2299,6 @@ components:
           type: number
           minimum: 0
           maximum: 1
-        raw_response:
-          type: string
-          writeOnly: true
-          description: プロバイダー生レスポンス（Restricted; 内部利用のみ）
         retrieved_at:
           type: string
           format: date-time
@@ -2307,6 +2307,9 @@ components:
       type: object
       properties:
         id:
+          type: string
+          format: uuid
+        case_id:
           type: string
           format: uuid
         fragments:

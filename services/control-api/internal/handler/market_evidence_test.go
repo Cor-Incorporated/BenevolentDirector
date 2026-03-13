@@ -93,6 +93,14 @@ func TestMarketEvidenceHandlerCollectValidationError(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
+
+	var body map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	if body["error"] != "invalid request" {
+		t.Fatalf("error = %q, want %q", body["error"], "invalid request")
+	}
 }
 
 func TestMarketEvidenceHandlerGet(t *testing.T) {

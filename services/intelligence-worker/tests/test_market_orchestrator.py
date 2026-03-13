@@ -58,6 +58,7 @@ class _Provider:
     delay: float = 0.0
     error: Exception | None = None
     tracker: dict[str, int] | None = None
+    closed: bool = False
 
     def provider_name(self) -> str:
         return self.name
@@ -83,6 +84,9 @@ class _Provider:
         finally:
             if self.tracker is not None:
                 self.tracker["current"] -= 1
+
+    async def aclose(self) -> None:
+        self.closed = True
 
 
 @dataclass
@@ -189,6 +193,30 @@ def test_orchestrator_gracefully_degrades_on_timeout() -> None:
         "perplexity",
         "gemini",
     ]
+
+
+def test_orchestrator_closes_providers_after_collection() -> None:
+    providers = [_Provider("grok"), _Provider("brave")]
+    orchestrator = MarketIntelligenceOrchestrator(
+        providers=providers,
+        repository=_FakeRepository(),
+        timeout_seconds=1.0,
+        max_retries=0,
+    )
+
+    asyncio.run(
+        orchestrator.collect(
+            MarketQuery(
+                evidence_id="11111111-1111-1111-1111-111111111111",
+                tenant_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                case_type="new_project",
+                context="Build a multi-tenant SaaS platform",
+                providers=("grok", "brave"),
+            )
+        )
+    )
+
+    assert [provider.closed for provider in providers] == [True, True]
 
 
 def test_market_subscriber_accepts_legacy_alias() -> None:

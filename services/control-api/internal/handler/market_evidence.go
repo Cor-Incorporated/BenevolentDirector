@@ -67,7 +67,7 @@ func (h *MarketEvidenceHandler) Collect(w http.ResponseWriter, r *http.Request) 
 		case errors.Is(err, service.ErrPublisherUnavailable):
 			writeJSONError(w, "market research queue unavailable", http.StatusServiceUnavailable)
 		default:
-			writeJSONError(w, err.Error(), http.StatusBadRequest)
+			writeJSONError(w, "invalid request", http.StatusBadRequest)
 		}
 		return
 	}

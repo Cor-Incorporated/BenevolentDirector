@@ -90,7 +90,7 @@ class MarketEvidenceRepository:
                         _as_int(fragment.team_size_range.max),
                         _as_int(fragment.duration_range.min),
                         _as_int(fragment.duration_range.max),
-                        Json([citation.as_dict() for citation in fragment.citations]),
+                        Json([citation.to_dict() for citation in fragment.citations]),
                         fragment.provider_confidence,
                         fragment.raw_response,
                         fragment.retrieved_at,
@@ -138,7 +138,7 @@ class MarketEvidenceRepository:
                     aggregate.consensus_rate_range.min,
                     aggregate.consensus_rate_range.max,
                     aggregate.overall_confidence,
-                    Json([item.as_dict() for item in aggregate.contradictions]),
+                    Json([item.to_dict() for item in aggregate.contradictions]),
                     aggregate.requires_human_review,
                     aggregate.aggregated_at,
                 ),
@@ -148,7 +148,7 @@ class MarketEvidenceRepository:
 def serialize_aggregate(evidence: AggregatedEvidence) -> str:
     """Utility for tests."""
 
-    return json.dumps(evidence.as_dict(), default=str, ensure_ascii=False)
+    return json.dumps(evidence.to_dict(), default=str, ensure_ascii=False)
 
 
 def serialize_fragment(fragment: EvidenceFragment) -> dict[str, Any]:

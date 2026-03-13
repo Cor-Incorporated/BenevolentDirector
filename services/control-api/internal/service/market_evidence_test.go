@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -60,6 +61,28 @@ func TestMarketEvidenceServiceQueueCollection(t *testing.T) {
 	}
 	if payload["region"] != "japan" {
 		t.Fatalf("region = %v, want japan", payload["region"])
+	}
+}
+
+func TestMarketEvidenceServiceQueueCollectionRejectsContextOverLimit(t *testing.T) {
+	messagePublisher := &fakeMarketMessagePublisher{}
+	publisher := marketevent.NewPublisher(messagePublisher, "market-topic")
+	service := NewMarketEvidenceService(nil, publisher)
+
+	err := service.QueueCollection(context.Background(), CollectMarketEvidenceInput{
+		TenantID:   uuid.New(),
+		EvidenceID: uuid.New(),
+		CaseType:   domain.CaseTypeNewProject,
+		Context:    strings.Repeat("a", 10001),
+	})
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if err.Error() != "context must be 10000 characters or less" {
+		t.Fatalf("error = %q, want %q", err.Error(), "context must be 10000 characters or less")
+	}
+	if len(messagePublisher.data) != 0 {
+		t.Fatal("publisher should not be called when validation fails")
 	}
 }
 

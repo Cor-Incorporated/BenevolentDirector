@@ -6,6 +6,8 @@ import json
 from collections.abc import Callable
 from typing import Any, Protocol
 
+from intelligence_worker.market.payloads import extract_market_payload
+
 
 class ReceivedMessage(Protocol):
     """Minimal Pub/Sub message contract."""
@@ -65,7 +67,7 @@ class MarketResearchRequestedSubscriber:
             if event_name not in self.TARGET_EVENT_NAMES:
                 message.ack()
                 return
-            self._handler(_normalize_payload(payload))
+            self._handler(extract_market_payload(payload))
             message.ack()
         except Exception:  # noqa: BLE001
             message.nack()
@@ -91,15 +93,3 @@ def _extract_event_name(payload: dict[str, Any]) -> str | None:
             return env_event
 
     return None
-
-
-def _normalize_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    nested = payload.get("payload")
-    if not isinstance(nested, dict):
-        return payload
-
-    merged = dict(nested)
-    for field in ("tenant_id", "case_id", "evidence_id", "job_id"):
-        if field not in merged and isinstance(payload.get(field), str):
-            merged[field] = payload[field]
-    return merged

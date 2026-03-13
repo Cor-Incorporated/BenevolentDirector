@@ -16,6 +16,7 @@ from intelligence_worker.market.runtime import (
     MarketResearchRequestedHandler,
     PostgresMarketEvidenceRepository,
     build_market_providers,
+    start_market_subscriber,
 )
 from intelligence_worker.market.subscriber import MarketResearchRequestedSubscriber
 
@@ -58,6 +59,20 @@ class _FakeClient:
         self.subscription = subscription
         self.callback = callback
         return self.future
+
+
+@dataclass
+class _FakeHTTPClient:
+    closed: bool = False
+
+    async def get(self, _url: str, **_kwargs: Any) -> Any:
+        raise AssertionError("unexpected GET")
+
+    async def post(self, _url: str, **_kwargs: Any) -> Any:
+        raise AssertionError("unexpected POST")
+
+    async def aclose(self) -> None:
+        self.closed = True
 
 
 class _FakeOrchestrator:
@@ -178,6 +193,38 @@ def test_build_market_providers_skips_missing_api_keys() -> None:
         "grok",
         "perplexity",
     ]
+
+
+def test_start_market_subscriber_returns_runtime_with_shared_client() -> None:
+    config = type(
+        "_Config",
+        (),
+        {
+            "pubsub_project_id": "proj",
+            "market_pubsub_subscription": "market-sub",
+            "grok_api_key": "grok",
+            "brave_api_key": None,
+            "perplexity_api_key": None,
+            "gemini_api_key": None,
+            "market_provider_timeout_seconds": 12.5,
+            "market_provider_max_retries": 3,
+        },
+    )()
+    subscriber_client = _FakeClient()
+    http_client = _FakeHTTPClient()
+
+    runtime = start_market_subscriber(
+        config=config,
+        subscriber_client=subscriber_client,
+        conn_manager=MagicMock(),
+        client=http_client,
+    )
+
+    assert runtime is not None
+    assert runtime.future is subscriber_client.future
+    assert runtime.subscription_id == "market-sub"
+    runtime.close()
+    assert http_client.closed is True
 
 
 def orchestrator_query() -> Any:

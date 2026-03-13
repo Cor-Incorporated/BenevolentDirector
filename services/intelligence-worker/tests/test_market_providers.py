@@ -35,6 +35,7 @@ class _FakeClient:
     response: _FakeResponse
     last_url: str | None = None
     last_kwargs: dict[str, Any] | None = None
+    closed: bool = False
 
     async def get(self, url: str, **kwargs: Any) -> _FakeResponse:
         self.last_url = url
@@ -45,6 +46,9 @@ class _FakeClient:
         self.last_url = url
         self.last_kwargs = kwargs
         return self.response
+
+    async def aclose(self) -> None:
+        self.closed = True
 
 
 def _query() -> MarketQuery:
@@ -196,4 +200,34 @@ def test_gemini_provider_normalizes_candidates() -> None:
     assert fragments[0].hourly_rate_range.max == 130
     assert fragments[0].total_hours_range.min == 150
     assert client.last_url is not None
-    assert "key=secret" in client.last_url
+    assert client.last_url == provider.endpoint
+    assert client.last_kwargs is not None
+    assert client.last_kwargs["headers"]["x-goog-api-key"] == "secret"
+    assert "params" not in client.last_kwargs
+
+
+def test_provider_aclose_closes_owned_http_client(monkeypatch: Any) -> None:
+    class _OwnedClient(_FakeClient):
+        def __init__(self) -> None:
+            super().__init__(response=_FakeResponse({"choices": []}))
+
+    owned_clients: list[_OwnedClient] = []
+
+    def _factory(*, timeout_seconds: float = 30.0) -> _OwnedClient:
+        del timeout_seconds
+        client = _OwnedClient()
+        owned_clients.append(client)
+        return client
+
+    monkeypatch.setattr(
+        "intelligence_worker.market.providers.HTTPProviderSearchClient",
+        _factory,
+    )
+    provider = GrokMarketProvider(api_key="secret")
+
+    provider._client()
+    __import__("asyncio").run(provider.aclose())
+
+    assert len(owned_clients) == 1
+    assert owned_clients[0].closed is True
+    assert provider.client is None

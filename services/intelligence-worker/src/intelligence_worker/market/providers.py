@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol, cast
 
@@ -64,6 +64,8 @@ class AsyncHTTPClient(Protocol):
 
     async def post(self, url: str, **kwargs: Any) -> AsyncHTTPResponse: ...
 
+    async def aclose(self) -> None: ...
+
 
 class HTTPProviderSearchClient:
     """Default reusable async HTTP client wrapper for providers."""
@@ -80,16 +82,30 @@ class HTTPProviderSearchClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
+    async def __aenter__(self) -> HTTPProviderSearchClient:
+        return self
+
+    async def __aexit__(self, *_args: object) -> None:
+        await self.aclose()
+
 
 @dataclass(slots=True)
 class _BaseProvider:
     api_key: str
     client: AsyncHTTPClient | None = None
+    _owns_client: bool = field(init=False, default=False, repr=False)
 
     def _client(self) -> AsyncHTTPClient:
         if self.client is None:
-            self.client = cast("AsyncHTTPClient", httpx.AsyncClient())
+            self.client = HTTPProviderSearchClient()
+            self._owns_client = True
         return cast("AsyncHTTPClient", self.client)
+
+    async def aclose(self) -> None:
+        if self._owns_client and self.client is not None:
+            await self.client.aclose()
+            self.client = None
+            self._owns_client = False
 
     def _json_headers(self) -> dict[str, str]:
         return {"Content-Type": "application/json"}
@@ -236,9 +252,11 @@ class GeminiMarketProvider(_BaseProvider):
 
     async def search(self, query: MarketQuery) -> list[EvidenceFragment]:
         response = await self._client().post(
-            f"{self.endpoint}?key={self.api_key}",
-            params={"key": self.api_key},
-            headers=self._json_headers(),
+            self.endpoint,
+            headers={
+                **self._json_headers(),
+                "x-goog-api-key": self.api_key,
+            },
             json={
                 "contents": [
                     {

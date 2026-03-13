@@ -41,19 +41,7 @@ from intelligence_worker.dead_letter_events import (
     DeadLetterRetryLoop,
     DeadLetterRetryProcessor,
 )
-from intelligence_worker.market import MarketIntelligenceOrchestrator, MarketProvider
-from intelligence_worker.market import (
-    MarketResearchRequestedHandler as RuntimeMarketResearchRequestedHandler,
-)
-from intelligence_worker.market import (
-    MarketResearchRequestedSubscriber as RuntimeMarketResearchRequestedSubscriber,
-)
-from intelligence_worker.market import (
-    PostgresMarketEvidenceRepository as RuntimeMarketEvidenceRepository,
-)
-from intelligence_worker.market import (
-    build_market_providers as runtime_build_market_providers,
-)
+from intelligence_worker.market.runtime import start_market_subscriber
 from intelligence_worker.qa_extraction import (
     ConversationTurn,
     QAPair,
@@ -617,7 +605,6 @@ def run() -> None:
     completeness_repository = CompletenessTrackingRepository(conn_manager)
     artifact_repository = RequirementArtifactRepository(conn_manager)
     artifact_generator = RequirementArtifactGenerator(llm_client=llm_client)
-    market_repository = RuntimeMarketEvidenceRepository(conn_manager)
     dead_letter_store = DeadLetterEventStore(
         conn_manager,
         max_retries=config.dead_letter_max_retries,
@@ -684,35 +671,13 @@ def run() -> None:
         project_id=config.pubsub_project_id,
         subscription=config.pubsub_subscription,
     )
-    if _market_feature_enabled(config):
-        market_handler = RuntimeMarketResearchRequestedHandler(
-            orchestrator=MarketIntelligenceOrchestrator(
-                providers=_build_market_providers(config),
-                repository=market_repository,
-                timeout_seconds=config.market_provider_timeout_seconds,
-                max_retries=config.market_provider_max_retries,
-            )
-        )
-        market_subscriber = RuntimeMarketResearchRequestedSubscriber(
-            client=subscriber_client,
-            project_id=config.pubsub_project_id,
-            subscription_id=config.market_pubsub_subscription,
-            handler=market_handler,
-        )
-        futures.append(market_subscriber.start())
-        logger.info(
-            "market_subscriber_started",
-            project_id=config.pubsub_project_id,
-            subscription=config.market_pubsub_subscription,
-        )
-    else:
-        logger.warning(
-            "market_subscriber_skipped_missing_credentials",
-            has_grok=bool(config.grok_api_key),
-            has_brave=bool(config.brave_api_key),
-            has_perplexity=bool(config.perplexity_api_key),
-            has_gemini=bool(config.gemini_api_key),
-        )
+    market_runtime = start_market_subscriber(
+        config=config,
+        subscriber_client=subscriber_client,
+        conn_manager=conn_manager,
+    )
+    if market_runtime is not None:
+        futures.append(market_runtime.future)
 
     try:
         _shutdown_event.wait()
@@ -721,27 +686,9 @@ def run() -> None:
             future.cancel()
         retry_thread.join(timeout=1)
         subscriber_client.close()
+        if market_runtime is not None:
+            market_runtime.close()
         conn_manager.close_all()
-
-
-def _market_feature_enabled(config: Any) -> bool:
-    return all(
-        (
-            config.grok_api_key,
-            config.brave_api_key,
-            config.perplexity_api_key,
-            config.gemini_api_key,
-        )
-    )
-
-
-def _build_market_providers(config: Any) -> list[MarketProvider]:
-    return runtime_build_market_providers(
-        grok_api_key=config.grok_api_key,
-        brave_api_key=config.brave_api_key,
-        perplexity_api_key=config.perplexity_api_key,
-        gemini_api_key=config.gemini_api_key,
-    )
 
 
 def main() -> NoReturn:

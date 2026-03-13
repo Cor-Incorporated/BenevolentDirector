@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/domain"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/marketevent"
@@ -54,6 +55,9 @@ func (s *MarketEvidenceService) QueueCollection(ctx context.Context, input Colle
 	contextText := strings.TrimSpace(input.Context)
 	if contextText == "" {
 		return fmt.Errorf("context is required")
+	}
+	if utf8.RuneCountInString(contextText) > 10000 {
+		return fmt.Errorf("context must be 10000 characters or less")
 	}
 
 	providers := input.Providers

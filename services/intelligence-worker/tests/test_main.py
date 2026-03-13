@@ -16,10 +16,12 @@ from intelligence_worker.main import (
     LoggingDeadLetterPublisher,
     PostgresQAPairRepository,
     TurnCompletedHandler,
-    _build_market_providers,
     _handle_signal,
-    _market_feature_enabled,
     _shutdown_event,
+)
+from intelligence_worker.market.runtime import (
+    build_market_providers,
+    market_feature_enabled,
 )
 from intelligence_worker.qa_extraction import ConversationTurn, QAPair
 
@@ -231,22 +233,37 @@ def test_market_feature_enabled_when_all_provider_keys_exist() -> None:
         },
     )()
 
-    assert _market_feature_enabled(config) is True
+    assert market_feature_enabled(config) is True
 
 
-def test_market_feature_disabled_when_any_provider_key_missing() -> None:
+def test_market_feature_enabled_when_any_provider_key_exists() -> None:
     config = type(
         "_Config",
         (),
         {
             "grok_api_key": "grok",
             "brave_api_key": None,
-            "perplexity_api_key": "perplexity",
+            "perplexity_api_key": None,
             "gemini_api_key": None,
         },
     )()
 
-    assert _market_feature_enabled(config) is False
+    assert market_feature_enabled(config) is True
+
+
+def test_market_feature_disabled_when_all_provider_keys_missing() -> None:
+    config = type(
+        "_Config",
+        (),
+        {
+            "grok_api_key": None,
+            "brave_api_key": None,
+            "perplexity_api_key": None,
+            "gemini_api_key": None,
+        },
+    )()
+
+    assert market_feature_enabled(config) is False
 
 
 def test_build_market_providers_returns_all_providers() -> None:
@@ -261,7 +278,12 @@ def test_build_market_providers_returns_all_providers() -> None:
         },
     )()
 
-    providers = _build_market_providers(config)
+    providers = build_market_providers(
+        grok_api_key=config.grok_api_key,
+        brave_api_key=config.brave_api_key,
+        perplexity_api_key=config.perplexity_api_key,
+        gemini_api_key=config.gemini_api_key,
+    )
 
     assert [provider.provider_name() for provider in providers] == [
         "grok",

@@ -66,9 +66,6 @@ class Range:
             payload["max"] = self.max
         return payload
 
-    def as_dict(self) -> dict[str, float]:
-        return self.to_dict()
-
 
 @dataclass(frozen=True)
 class Citation:
@@ -86,9 +83,6 @@ class Citation:
             "source_authority": self.source_authority,
             "snippet": self.snippet,
         }
-
-    def as_dict(self) -> dict[str, str]:
-        return self.to_dict()
 
 
 @dataclass(frozen=True)
@@ -124,9 +118,6 @@ class EvidenceFragment:
             payload["raw_response"] = self.raw_response
         return payload
 
-    def as_dict(self) -> dict[str, object]:
-        return self.to_dict()
-
 
 @dataclass(frozen=True)
 class Contradiction:
@@ -144,9 +135,6 @@ class Contradiction:
             "field": self.field,
             "description": self.description,
         }
-
-    def as_dict(self) -> dict[str, str]:
-        return self.to_dict()
 
 
 @dataclass(frozen=True)
@@ -181,9 +169,6 @@ class AggregatedEvidence:
             "requires_human_review": self.requires_human_review,
             "aggregated_at": self.aggregated_at.isoformat(),
         }
-
-    def as_dict(self) -> dict[str, Any]:
-        return self.to_dict()
 
 
 @dataclass(frozen=True)

@@ -20,8 +20,11 @@ from intelligence_worker.market.providers import (
 )
 from intelligence_worker.market.runtime import (
     MarketResearchRequestedHandler,
+    MarketRuntime,
     PostgresMarketEvidenceRepository,
     build_market_providers,
+    market_feature_enabled,
+    start_market_subscriber,
 )
 from intelligence_worker.market.subscriber import MarketResearchRequestedSubscriber
 
@@ -39,9 +42,12 @@ __all__ = [
     "MarketQuery",
     "MarketResearchRequestedHandler",
     "MarketResearchRequestedSubscriber",
+    "MarketRuntime",
     "PerplexityMarketProvider",
     "PostgresMarketEvidenceRepository",
     "Range",
     "build_default_providers",
     "build_market_providers",
+    "market_feature_enabled",
+    "start_market_subscriber",
 ]

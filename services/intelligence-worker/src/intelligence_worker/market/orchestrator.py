@@ -41,25 +41,31 @@ class MarketIntelligenceOrchestrator:
         selected = self._select_providers(query)
         if not selected:
             raise RuntimeError("no market providers available for query")
-        tasks = [
-            asyncio.create_task(self._collect_from_provider(provider, query))
-            for provider in selected
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        fragments: list[EvidenceFragment] = []
-        for result in results:
-            if isinstance(result, BaseException):
-                logger.warning("market_provider_failed", error=str(result))
-                continue
-            fragments.extend(result)
+        try:
+            tasks = [
+                asyncio.create_task(self._collect_from_provider(provider, query))
+                for provider in selected
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            fragments: list[EvidenceFragment] = []
+            for result in results:
+                if isinstance(result, BaseException):
+                    logger.warning("market_provider_failed", error=str(result))
+                    continue
+                fragments.extend(result)
 
-        if not fragments and selected:
-            raise RuntimeError("all market providers failed")
+            if not fragments and selected:
+                raise RuntimeError("all market providers failed")
 
-        aggregate = self._aggregate(query, fragments)
-        if self.repository is not None:
-            self.repository.save(query=query, aggregate=aggregate)
-        return aggregate
+            aggregate = self._aggregate(query, fragments)
+            if self.repository is not None:
+                self.repository.save(query=query, aggregate=aggregate)
+            return aggregate
+        finally:
+            await asyncio.gather(
+                *(_close_provider(provider) for provider in selected),
+                return_exceptions=True,
+            )
 
     def _select_providers(self, query: MarketQuery) -> list[MarketProvider]:
         requested = set(query.providers)
@@ -119,6 +125,14 @@ class MarketIntelligenceOrchestrator:
             requires_human_review=requires_human_review,
             aggregated_at=datetime.now(UTC),
         )
+
+
+async def _close_provider(provider: MarketProvider) -> None:
+    close = getattr(provider, "aclose", None)
+    if callable(close):
+        await close()
+
+
 def _consensus_range(ranges: list[Range]) -> Range:
     populated = [
         value
