@@ -42,3 +42,27 @@ variable "exports_bucket_name" {
   type        = string
   default     = ""
 }
+
+variable "control_api_secret_ids" {
+  description = "List of Secret Manager secret IDs that control-api can access"
+  type        = list(string)
+  default     = []
+}
+
+variable "intelligence_worker_secret_ids" {
+  description = "List of Secret Manager secret IDs that intelligence-worker can access"
+  type        = list(string)
+  default     = []
+}
+
+variable "llm_gateway_secret_ids" {
+  description = "List of Secret Manager secret IDs that llm-gateway can access"
+  type        = list(string)
+  default     = []
+}
+
+variable "web_deploy_secret_ids" {
+  description = "List of Secret Manager secret IDs that web-deploy can access"
+  type        = list(string)
+  default     = []
+}
