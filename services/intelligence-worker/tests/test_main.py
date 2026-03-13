@@ -16,7 +16,9 @@ from intelligence_worker.main import (
     LoggingDeadLetterPublisher,
     PostgresQAPairRepository,
     TurnCompletedHandler,
+    _build_market_providers,
     _handle_signal,
+    _market_feature_enabled,
     _shutdown_event,
 )
 from intelligence_worker.qa_extraction import ConversationTurn, QAPair
@@ -215,6 +217,58 @@ class TestLoggingDeadLetterPublisher:
         """Empty payload is accepted without error."""
         publisher = LoggingDeadLetterPublisher()
         publisher.publish(reason="empty", payload={})
+
+
+def test_market_feature_enabled_when_all_provider_keys_exist() -> None:
+    config = type(
+        "_Config",
+        (),
+        {
+            "grok_api_key": "grok",
+            "brave_api_key": "brave",
+            "perplexity_api_key": "perplexity",
+            "gemini_api_key": "gemini",
+        },
+    )()
+
+    assert _market_feature_enabled(config) is True
+
+
+def test_market_feature_disabled_when_any_provider_key_missing() -> None:
+    config = type(
+        "_Config",
+        (),
+        {
+            "grok_api_key": "grok",
+            "brave_api_key": None,
+            "perplexity_api_key": "perplexity",
+            "gemini_api_key": None,
+        },
+    )()
+
+    assert _market_feature_enabled(config) is False
+
+
+def test_build_market_providers_returns_all_providers() -> None:
+    config = type(
+        "_Config",
+        (),
+        {
+            "grok_api_key": "grok",
+            "brave_api_key": "brave",
+            "perplexity_api_key": "perplexity",
+            "gemini_api_key": "gemini",
+        },
+    )()
+
+    providers = _build_market_providers(config)
+
+    assert [provider.provider_name() for provider in providers] == [
+        "grok",
+        "brave",
+        "perplexity",
+        "gemini",
+    ]
 
 
 # ---------------------------------------------------------------------------

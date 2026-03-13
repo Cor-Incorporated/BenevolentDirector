@@ -461,10 +461,15 @@ class _FakeLLM:
     should_fail: bool = False
 
     def extract_structured(
-        self, *, prompt: str, response_schema: dict[str, Any]
+        self,
+        *,
+        prompt: str,
+        response_schema: dict[str, Any],
+        system_prompt: str | None = None,
     ) -> str:
         assert "qa_pairs" in response_schema.get("properties", {})
         assert "source_domain=" in prompt
+        del system_prompt
         if self.should_fail:
             raise RuntimeError("llm unavailable")
         return self.response_text
@@ -815,6 +820,11 @@ def test_run_cancels_subscription_and_closes_resources_on_shutdown() -> None:
         control_api_token="token",
         pubsub_project_id="project-1",
         pubsub_subscription="conversation-turn-completed",
+        market_pubsub_subscription="market-research-requested",
+        grok_api_key=None,
+        brave_api_key=None,
+        perplexity_api_key=None,
+        gemini_api_key=None,
     )
     conn_manager = MagicMock()
     thread_factory = _FakeThreadFactory()
