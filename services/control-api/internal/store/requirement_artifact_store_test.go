@@ -14,7 +14,7 @@ import (
 func artifactColumns() []string {
 	return []string{
 		"id", "tenant_id", "case_id", "version", "markdown",
-		"source_chunks", "status", "created_by_uid",
+		"source_chunks", "citations", "status", "created_by_uid",
 		"created_at", "updated_at",
 	}
 }
@@ -26,7 +26,9 @@ func TestSQLRequirementArtifactStore_GetLatestByCaseID(t *testing.T) {
 	artifactID := uuid.New()
 	chunk1 := uuid.New()
 	chunk2 := uuid.New()
+	sourceID := uuid.New()
 	uid := "user-123"
+	citationsJSON := `[{"chunk_id":"` + chunk1.String() + `","source_id":"` + sourceID.String() + `","chunk_index":0,"offset_start":0,"offset_end":24,"content_sha256":"abc123"}]`
 
 	tests := []struct {
 		name       string
@@ -44,7 +46,7 @@ func TestSQLRequirementArtifactStore_GetLatestByCaseID(t *testing.T) {
 					WillReturnRows(
 						sqlmock.NewRows(artifactColumns()).
 							AddRow(artifactID, tenantID, caseID, 3, "# Requirements\n",
-								"{"+chunk1.String()+","+chunk2.String()+"}", "draft", &uid,
+								"{"+chunk1.String()+","+chunk2.String()+"}", citationsJSON, "draft", &uid,
 								now, now),
 					)
 			},
@@ -81,7 +83,7 @@ func TestSQLRequirementArtifactStore_GetLatestByCaseID(t *testing.T) {
 					WillReturnRows(
 						sqlmock.NewRows(artifactColumns()).
 							AddRow(artifactID, tenantID, caseID, 1, "# Spec",
-								"{}", "finalized", nil,
+								"{}", "[]", "finalized", nil,
 								now, now),
 					)
 			},
@@ -128,9 +130,50 @@ func TestSQLRequirementArtifactStore_GetLatestByCaseID(t *testing.T) {
 			if result.Status != tt.wantStatus {
 				t.Errorf("Status = %q, want %q", result.Status, tt.wantStatus)
 			}
+			if !tt.wantNil && tt.wantVer == 3 && len(result.Citations) != 1 {
+				t.Errorf("Citations len = %d, want 1", len(result.Citations))
+			}
 
 			if err := mock.ExpectationsWereMet(); err != nil {
 				t.Errorf("unfulfilled expectations: %v", err)
+			}
+		})
+	}
+}
+
+func TestRequirementArtifactCitationsScanner(t *testing.T) {
+	chunkID := uuid.New()
+	sourceID := uuid.New()
+
+	tests := []struct {
+		name    string
+		input   any
+		wantLen int
+		wantErr bool
+	}{
+		{name: "nil input", input: nil, wantLen: 0, wantErr: false},
+		{name: "empty json array", input: "[]", wantLen: 0, wantErr: false},
+		{
+			name:    "valid citations json",
+			input:   `[{"chunk_id":"` + chunkID.String() + `","source_id":"` + sourceID.String() + `","chunk_index":1,"offset_start":2,"offset_end":8,"content_sha256":"sha"}]`,
+			wantLen: 1,
+			wantErr: false,
+		},
+		{name: "invalid json", input: "{not-json}", wantLen: 0, wantErr: true},
+		{name: "unsupported type", input: 42, wantLen: 0, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var s requirementArtifactCitationsScanner
+			err := s.Scan(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Scan() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr {
+				if len(s.Value()) != tt.wantLen {
+					t.Errorf("Value() len = %d, want %d", len(s.Value()), tt.wantLen)
+				}
 			}
 		})
 	}

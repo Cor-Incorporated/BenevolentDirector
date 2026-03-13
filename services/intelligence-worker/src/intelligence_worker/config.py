@@ -22,6 +22,7 @@ class Config:
 
     pubsub_project_id: str
     pubsub_subscription: str
+    pubsub_topic: str
     database_url: str
     llm_gateway_url: str
     control_api_url: str
@@ -63,6 +64,7 @@ def load_config() -> Config:
         "market-research-requested-sub",
     )
     llm_gateway_url = os.environ.get("LLM_GATEWAY_URL", "http://localhost:8081")
+    pubsub_topic = os.environ.get("PUBSUB_TOPIC", "conversation-turns")
     control_api_url = os.environ.get("CONTROL_API_URL", "http://localhost:8080")
     control_api_token = os.environ.get("CONTROL_API_TOKEN")
     grok_api_key = os.environ.get("GROK_API_KEY") or os.environ.get("XAI_API_KEY")
@@ -106,6 +108,7 @@ def load_config() -> Config:
     return Config(
         pubsub_project_id=env_vars["PUBSUB_PROJECT_ID"],  # type: ignore[arg-type]
         pubsub_subscription=pubsub_subscription,
+        pubsub_topic=pubsub_topic,
         database_url=env_vars["DATABASE_URL"],  # type: ignore[arg-type]
         llm_gateway_url=llm_gateway_url,
         control_api_url=control_api_url,

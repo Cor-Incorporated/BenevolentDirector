@@ -19,6 +19,7 @@ import (
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/llmclient"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/marketevent"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/middleware"
+	artifacttrigger "github.com/Cor-Incorporated/Grift/services/control-api/internal/requirementartifact"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/service"
 	sourcedocument "github.com/Cor-Incorporated/Grift/services/control-api/internal/source_document"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/storage"
@@ -110,10 +111,19 @@ func main() {
 	ragSearchHandler := handler.NewRAGSearchHandler(ragSearchStore, llm)
 	handler.RegisterRAGSearchRoutes(mux, ragSearchHandler)
 
-	// Requirement artifact route (P3: RequirementArtifact GET endpoint)
+	// Requirement artifact routes.
 	reqArtifactStore := store.NewSQLRequirementArtifactStore(db)
-	reqArtifactHandler := handler.NewRequirementArtifactHandler(reqArtifactStore)
+	var reqArtifactTrigger artifacttrigger.Trigger
+	if pubsubClient != nil {
+		reqArtifactTrigger = artifacttrigger.NewPubSubTrigger(
+			store.NewSQLCompletenessStore(db),
+			conversation.NewPubSubPublisher(pubsubClient),
+			os.Getenv("PUBSUB_TOPIC"),
+		)
+	}
+	reqArtifactHandler := handler.NewRequirementArtifactHandler(reqArtifactStore, reqArtifactTrigger)
 	mux.HandleFunc("GET /v1/cases/{caseId}/requirement-artifact", reqArtifactHandler.GetLatestByCaseID)
+	mux.HandleFunc("POST /v1/cases/{caseId}/requirement-artifact", reqArtifactHandler.TriggerGeneration)
 
 	var authMW, tenantMW func(http.Handler) http.Handler
 	if os.Getenv("AUTH_DISABLED") == "true" {

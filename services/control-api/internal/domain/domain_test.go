@@ -174,6 +174,16 @@ func TestRequirementArtifactJSONRoundTrip(t *testing.T) {
 		Version:      2,
 		Markdown:     "# Requirements\n\n- Feature A\n- Feature B",
 		SourceChunks: []uuid.UUID{chunk1, chunk2},
+		Citations: []RequirementArtifactCitation{
+			{
+				ChunkID:       chunk1,
+				SourceID:      uuid.New(),
+				ChunkIndex:    0,
+				OffsetStart:   0,
+				OffsetEnd:     10,
+				ContentSHA256: "abc123",
+			},
+		},
 		Status:       ArtifactStatusFinalized,
 		CreatedByUID: &creator,
 		CreatedAt:    now,
@@ -201,6 +211,9 @@ func TestRequirementArtifactJSONRoundTrip(t *testing.T) {
 	}
 	if got.SourceChunks[0] != chunk1 {
 		t.Errorf("SourceChunks[0] = %v, want %v", got.SourceChunks[0], chunk1)
+	}
+	if len(got.Citations) != 1 {
+		t.Fatalf("Citations len = %d, want 1", len(got.Citations))
 	}
 	if got.Status != ArtifactStatusFinalized {
 		t.Errorf("Status = %v, want %v", got.Status, ArtifactStatusFinalized)

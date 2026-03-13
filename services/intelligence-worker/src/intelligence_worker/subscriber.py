@@ -1,4 +1,4 @@
-"""Pub/Sub subscriber for conversation turn completion events."""
+"""Pub/Sub subscriber helpers for worker event dispatch."""
 
 from __future__ import annotations
 
@@ -33,13 +33,11 @@ class SubscriberClient(Protocol):
     ) -> StreamingPullFuture: ...
 
 
-TurnCompletedHandler = Callable[[dict[str, Any]], None]
+EventHandler = Callable[[dict[str, Any]], None]
 
 
-class ConversationTurnCompletedSubscriber:
-    """Subscribe to `conversation.turn.completed` events and dispatch handler."""
-
-    TARGET_EVENT_NAME = "conversation.turn.completed"
+class EventSubscriber:
+    """Subscribe once and dispatch messages by event name."""
 
     def __init__(
         self,
@@ -47,13 +45,13 @@ class ConversationTurnCompletedSubscriber:
         client: SubscriberClient,
         project_id: str,
         subscription_id: str,
-        handler: TurnCompletedHandler,
+        handlers: dict[str, EventHandler],
     ) -> None:
         self._client = client
         self._subscription_path = (
             f"projects/{project_id}/subscriptions/{subscription_id}"
         )
-        self._handler = handler
+        self._handlers = handlers
 
     def start(self) -> StreamingPullFuture:
         """Start subscription and return immediately."""
@@ -63,13 +61,56 @@ class ConversationTurnCompletedSubscriber:
         try:
             payload = json.loads(message.data.decode("utf-8"))
             event_name = _extract_event_name(payload)
-            if event_name != self.TARGET_EVENT_NAME:
+            handler = self._handlers.get(event_name or "")
+            if handler is None:
                 message.ack()
                 return
-            self._handler(payload)
+            handler(payload)
             message.ack()
         except Exception:  # noqa: BLE001
             message.nack()
+
+
+class ConversationTurnCompletedSubscriber(EventSubscriber):
+    """Compatibility wrapper for `conversation.turn.completed`."""
+
+    TARGET_EVENT_NAME = "conversation.turn.completed"
+
+    def __init__(
+        self,
+        *,
+        client: SubscriberClient,
+        project_id: str,
+        subscription_id: str,
+        handler: EventHandler,
+    ) -> None:
+        super().__init__(
+            client=client,
+            project_id=project_id,
+            subscription_id=subscription_id,
+            handlers={self.TARGET_EVENT_NAME: handler},
+        )
+
+
+class ObservationCompletenessUpdatedSubscriber(EventSubscriber):
+    """Compatibility wrapper for `observation.completeness.updated`."""
+
+    TARGET_EVENT_NAME = "observation.completeness.updated"
+
+    def __init__(
+        self,
+        *,
+        client: SubscriberClient,
+        project_id: str,
+        subscription_id: str,
+        handler: EventHandler,
+    ) -> None:
+        super().__init__(
+            client=client,
+            project_id=project_id,
+            subscription_id=subscription_id,
+            handlers={self.TARGET_EVENT_NAME: handler},
+        )
 
 
 def _extract_event_name(payload: dict[str, Any]) -> str | None:

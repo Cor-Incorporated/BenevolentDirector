@@ -21,6 +21,7 @@ v2 の Python intelligence plane。
 - `PUBSUB_PROJECT_ID`: subscribe 対象の GCP project。
 - `PUBSUB_SUBSCRIPTION`: subscription 名。未指定時は `conversation-turn-completed-sub`。
 - `MARKET_PUBSUB_SUBSCRIPTION`: `market.research.requested` を consume する subscription 名。未指定時は `market-research-requested-sub`。
+- `PUBSUB_TOPIC`: completeness 更新イベント publish 先 topic 名。未指定時は `conversation-turns`。
 - `LLM_GATEWAY_URL`: structured extraction を委譲する `llm-gateway` の base URL。
 - `CONTROL_API_URL`: `cases.type` 同期先の `control-api` base URL。未指定時は `http://localhost:8080`。
 - `CONTROL_API_TOKEN`: `control-api` PATCH に使う bearer token。未設定だと Authorization ヘッダーは送らない。

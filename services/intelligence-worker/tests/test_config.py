@@ -25,6 +25,7 @@ class TestLoadConfig:
         assert cfg.pubsub_project_id == "my-project"
         assert cfg.pubsub_subscription == "conversation-turn-completed-sub"
         assert cfg.market_pubsub_subscription == "market-research-requested-sub"
+        assert cfg.pubsub_topic == "conversation-turns"
         assert cfg.database_url == "postgresql://localhost/db"
         assert cfg.llm_gateway_url == "http://localhost:8081"
         assert cfg.control_api_url == "http://localhost:8080"
@@ -54,6 +55,7 @@ class TestLoadConfig:
             pubsub_project_id="p",
             pubsub_subscription="s",
             market_pubsub_subscription="market-sub",
+            pubsub_topic="conversation-turns",
             database_url="d",
             llm_gateway_url="http://localhost:8081",
             control_api_url="http://localhost:8080",
@@ -80,6 +82,7 @@ class TestLoadConfig:
             "EXTRACTOR_PLUGINS": "estimation, custom_plugin",
             "PUBSUB_SUBSCRIPTION": "custom-sub",
             "MARKET_PUBSUB_SUBSCRIPTION": "market-sub",
+            "PUBSUB_TOPIC": "observation-events",
             "LLM_GATEWAY_URL": "http://gateway:8081",
             "CONTROL_API_URL": "http://control-api:8080",
             "CONTROL_API_TOKEN": "secret-token",
@@ -99,6 +102,7 @@ class TestLoadConfig:
         assert cfg.extractor_plugins == ("estimation", "custom_plugin")
         assert cfg.pubsub_subscription == "custom-sub"
         assert cfg.market_pubsub_subscription == "market-sub"
+        assert cfg.pubsub_topic == "observation-events"
         assert cfg.llm_gateway_url == "http://gateway:8081"
         assert cfg.control_api_url == "http://control-api:8080"
         assert cfg.control_api_token == "secret-token"

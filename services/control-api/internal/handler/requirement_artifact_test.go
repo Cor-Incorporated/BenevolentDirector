@@ -11,6 +11,7 @@ import (
 
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/domain"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/middleware"
+	artifacttrigger "github.com/Cor-Incorporated/Grift/services/control-api/internal/requirementartifact"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/store"
 	"github.com/google/uuid"
 )
@@ -24,6 +25,15 @@ type mockRequirementArtifactStore struct {
 var _ store.RequirementArtifactStore = (*mockRequirementArtifactStore)(nil)
 
 func (m *mockRequirementArtifactStore) GetLatestByCaseID(_ context.Context, _, _ uuid.UUID) (*domain.RequirementArtifact, error) {
+	return m.result, m.err
+}
+
+type mockRequirementArtifactTrigger struct {
+	result *artifacttrigger.GenerationAccepted
+	err    error
+}
+
+func (m *mockRequirementArtifactTrigger) Trigger(_ context.Context, _, _ uuid.UUID) (*artifacttrigger.GenerationAccepted, error) {
 	return m.result, m.err
 }
 
@@ -98,7 +108,7 @@ func TestRequirementArtifactHandler_GetLatestByCaseID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := NewRequirementArtifactHandler(tt.store)
+			h := NewRequirementArtifactHandler(tt.store, nil)
 			mux := http.NewServeMux()
 			mux.HandleFunc("GET /v1/cases/{caseId}/requirement-artifact", h.GetLatestByCaseID)
 
@@ -136,6 +146,88 @@ func TestRequirementArtifactHandler_GetLatestByCaseID(t *testing.T) {
 				if _, ok := resp["data"]; !ok {
 					t.Error("response missing 'data' field")
 				}
+			}
+		})
+	}
+}
+
+func TestRequirementArtifactHandler_TriggerGeneration(t *testing.T) {
+	tenantID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	caseID := uuid.New()
+
+	tests := []struct {
+		name       string
+		trigger    artifacttrigger.Trigger
+		caseID     string
+		tenantID   string
+		wantStatus int
+	}{
+		{
+			name: "accepted",
+			trigger: &mockRequirementArtifactTrigger{
+				result: &artifacttrigger.GenerationAccepted{
+					Status:              "queued",
+					CaseID:              caseID,
+					OverallCompleteness: 0.8,
+				},
+			},
+			caseID:     caseID.String(),
+			tenantID:   tenantID,
+			wantStatus: http.StatusAccepted,
+		},
+		{
+			name: "completeness missing",
+			trigger: &mockRequirementArtifactTrigger{
+				err: artifacttrigger.ErrCompletenessObservationNotFound,
+			},
+			caseID:     caseID.String(),
+			tenantID:   tenantID,
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name: "threshold conflict",
+			trigger: &mockRequirementArtifactTrigger{
+				err: &artifacttrigger.CompletenessThresholdError{
+					OverallCompleteness: 0.6,
+					SuggestedNextTopics: []string{"budget"},
+				},
+			},
+			caseID:     caseID.String(),
+			tenantID:   tenantID,
+			wantStatus: http.StatusConflict,
+		},
+		{
+			name:       "nil trigger returns 503",
+			trigger:    nil,
+			caseID:     caseID.String(),
+			tenantID:   tenantID,
+			wantStatus: http.StatusServiceUnavailable,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewRequirementArtifactHandler(&mockRequirementArtifactStore{}, tt.trigger)
+			mux := http.NewServeMux()
+			mux.HandleFunc("POST /v1/cases/{caseId}/requirement-artifact", h.TriggerGeneration)
+
+			req := httptest.NewRequest(http.MethodPost, "/v1/cases/"+tt.caseID+"/requirement-artifact", nil)
+			req.Header.Set("X-Tenant-ID", tt.tenantID)
+
+			var captured *http.Request
+			mid := middleware.Tenant(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				captured = r
+			}))
+			mid.ServeHTTP(httptest.NewRecorder(), req)
+			req = captured
+			req.URL.Path = "/v1/cases/" + tt.caseID + "/requirement-artifact"
+			req.RequestURI = req.URL.Path
+
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tt.wantStatus, rec.Body.String())
 			}
 		})
 	}

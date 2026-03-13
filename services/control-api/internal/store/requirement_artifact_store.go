@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/domain"
@@ -32,7 +33,7 @@ func NewSQLRequirementArtifactStore(db *sql.DB) *SQLRequirementArtifactStore {
 func (s *SQLRequirementArtifactStore) GetLatestByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*domain.RequirementArtifact, error) {
 	const query = `
 		SELECT id, tenant_id, case_id, version, markdown,
-			source_chunks, status, created_by_uid,
+			source_chunks, citations, status, created_by_uid,
 			created_at, updated_at
 		FROM requirement_artifacts
 		WHERE tenant_id = $1 AND case_id = $2
@@ -42,11 +43,12 @@ func (s *SQLRequirementArtifactStore) GetLatestByCaseID(ctx context.Context, ten
 
 	var a domain.RequirementArtifact
 	var sourceChunks pqUUIDArrayScanner
+	var citations requirementArtifactCitationsScanner
 	var status string
 
 	err := s.DB.QueryRowContext(ctx, query, tenantID, caseID).Scan(
 		&a.ID, &a.TenantID, &a.CaseID, &a.Version, &a.Markdown,
-		&sourceChunks, &status, &a.CreatedByUID,
+		&sourceChunks, &citations, &status, &a.CreatedByUID,
 		&a.CreatedAt, &a.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -57,9 +59,50 @@ func (s *SQLRequirementArtifactStore) GetLatestByCaseID(ctx context.Context, ten
 	}
 
 	a.SourceChunks = sourceChunks.Value()
+	a.Citations = citations.Value()
 	a.Status = domain.ArtifactStatus(status)
 
 	return &a, nil
+}
+
+type requirementArtifactCitationsScanner struct {
+	data []domain.RequirementArtifactCitation
+}
+
+func (s *requirementArtifactCitationsScanner) Scan(src any) error {
+	if src == nil {
+		s.data = nil
+		return nil
+	}
+
+	var raw []byte
+	switch v := src.(type) {
+	case []byte:
+		raw = v
+	case string:
+		raw = []byte(v)
+	default:
+		return fmt.Errorf("unsupported type for citations json: %T", src)
+	}
+
+	if len(raw) == 0 {
+		s.data = nil
+		return nil
+	}
+
+	var citations []domain.RequirementArtifactCitation
+	if err := json.Unmarshal(raw, &citations); err != nil {
+		return fmt.Errorf("unmarshal citations json: %w", err)
+	}
+	s.data = citations
+	return nil
+}
+
+func (s *requirementArtifactCitationsScanner) Value() []domain.RequirementArtifactCitation {
+	if s.data == nil {
+		return []domain.RequirementArtifactCitation{}
+	}
+	return s.data
 }
 
 // pqUUIDArrayScanner scans a PostgreSQL uuid[] column into a Go uuid.UUID slice.

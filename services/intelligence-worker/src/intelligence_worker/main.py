@@ -42,6 +42,7 @@ from intelligence_worker.dead_letter_events import (
     DeadLetterRetryProcessor,
 )
 from intelligence_worker.market.runtime import start_market_subscriber
+from intelligence_worker.observation_events import CompletenessUpdatedPublisher
 from intelligence_worker.qa_extraction import (
     ConversationTurn,
     QAPair,
@@ -49,10 +50,12 @@ from intelligence_worker.qa_extraction import (
 )
 from intelligence_worker.quality_scoring import score_from_llm_output
 from intelligence_worker.requirement_artifacts import (
+    CompletenessUpdatedRequirementArtifactHandler,
     RequirementArtifactGenerator,
     RequirementArtifactRepository,
+    RequirementArtifactService,
 )
-from intelligence_worker.subscriber import ConversationTurnCompletedSubscriber
+from intelligence_worker.subscriber import EventSubscriber
 
 logger = structlog.get_logger()
 
@@ -291,8 +294,7 @@ class TurnCompletedHandler:
         case_type_client: CaseTypeSyncClient | None = None,
         missing_info_extractor: MissingInfoExtractor | None = None,
         completeness_repository: CompletenessTrackingRepository | None = None,
-        artifact_repository: RequirementArtifactRepository | None = None,
-        artifact_generator: RequirementArtifactGenerator | None = None,
+        completeness_event_publisher: CompletenessUpdatedPublisher | None = None,
         retry_processor: DeadLetterRetryProcessor | None = None,
     ) -> None:
         self._conversation_repo = conversation_repo
@@ -301,8 +303,7 @@ class TurnCompletedHandler:
         self._case_type_client = case_type_client
         self._missing_info_extractor = missing_info_extractor
         self._completeness_repository = completeness_repository
-        self._artifact_repository = artifact_repository
-        self._artifact_generator = artifact_generator
+        self._completeness_event_publisher = completeness_event_publisher
         self._retry_processor = retry_processor
 
     def __call__(self, payload: dict[str, object]) -> None:
@@ -319,7 +320,6 @@ class TurnCompletedHandler:
         self._extract_missing_info(context, intent=classification_result)
         pairs = self._extract_current_turn(context, raise_on_failure=False)
         self._persist_completeness(context, pairs)
-        self._persist_requirement_artifact(context)
 
     def retry_dead_letter(self, payload: dict[str, Any]) -> None:
         context = self._load_context(payload)
@@ -549,43 +549,30 @@ class TurnCompletedHandler:
                 session_id=context.session_id,
                 snapshot=snapshot,
             )
+            if self._completeness_event_publisher is not None:
+                try:
+                    self._completeness_event_publisher.publish_snapshot(
+                        tenant_id=context.tenant_id,
+                        session_id=context.session_id,
+                        source_domain=context.source_domain,
+                        aggregate_version=len(context.turns),
+                        snapshot=snapshot,
+                        causation_id=str(context.payload.get("event_id") or "") or None,
+                        correlation_id=str(context.payload.get("correlation_id") or "")
+                        or None,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "completeness_event_publish_failed",
+                        tenant_id=context.tenant_id,
+                        case_id=context.session_id,
+                        error=str(exc),
+                    )
         except ValueError:
             logger.info(
                 "completeness_tracking_skipped_for_domain",
                 source_domain=context.source_domain,
             )
-
-    def _persist_requirement_artifact(self, context: TurnCompletedContext) -> None:
-        if (
-            self._artifact_repository is None
-            or self._artifact_generator is None
-            or context.source_domain != "estimation"
-        ):
-            return
-
-        source_chunks = self._artifact_repository.load_source_chunks(
-            tenant_id=context.tenant_id,
-            case_id=context.session_id,
-        )
-        artifact = self._artifact_generator.generate(
-            turns=context.turns,
-            source_chunks=source_chunks,
-        )
-        version = self._artifact_repository.save_artifact(
-            tenant_id=context.tenant_id,
-            case_id=context.session_id,
-            draft=artifact,
-            created_by_uid="intelligence-worker",
-        )
-        if version is None:
-            return
-        logger.info(
-            "requirement_artifact_persisted",
-            tenant_id=context.tenant_id,
-            case_id=context.session_id,
-            version=version,
-            citation_count=len(artifact.source_chunks),
-        )
 
 
 def run() -> None:
@@ -605,6 +592,17 @@ def run() -> None:
     completeness_repository = CompletenessTrackingRepository(conn_manager)
     artifact_repository = RequirementArtifactRepository(conn_manager)
     artifact_generator = RequirementArtifactGenerator(llm_client=llm_client)
+    publisher_client = pubsub_v1.PublisherClient()
+    completeness_publisher = CompletenessUpdatedPublisher(
+        client=publisher_client,
+        project_id=config.pubsub_project_id,
+        topic_id=config.pubsub_topic,
+    )
+    artifact_service = RequirementArtifactService(
+        conversation_repository=conversation_repo,
+        artifact_repository=artifact_repository,
+        artifact_generator=artifact_generator,
+    )
     dead_letter_store = DeadLetterEventStore(
         conn_manager,
         max_retries=config.dead_letter_max_retries,
@@ -639,8 +637,10 @@ def run() -> None:
             bearer_token=config.control_api_token,
         ),
         completeness_repository=completeness_repository,
-        artifact_repository=artifact_repository,
-        artifact_generator=artifact_generator,
+        completeness_event_publisher=completeness_publisher,
+    )
+    completeness_handler = CompletenessUpdatedRequirementArtifactHandler(
+        service=artifact_service,
     )
     retry_processor = DeadLetterRetryProcessor(
         store=dead_letter_store,
@@ -659,11 +659,20 @@ def run() -> None:
     retry_thread.start()
 
     subscriber_client = pubsub_v1.SubscriberClient()
-    subscriber = ConversationTurnCompletedSubscriber(
+    subscriber = EventSubscriber(
         client=subscriber_client,
         project_id=config.pubsub_project_id,
         subscription_id=config.pubsub_subscription,
-        handler=handler,
+        handlers={
+            # Both event types currently share one subscription because
+            # observation.completeness.updated is re-published onto the same
+            # Pub/Sub stream that also carries conversation.turn.completed.
+            # That self-trigger pattern is intentional for now, but we should
+            # consider splitting subscriptions if routing or replay semantics
+            # become harder to reason about.
+            "conversation.turn.completed": handler,
+            "observation.completeness.updated": completeness_handler,
+        },
     )
     futures = [subscriber.start()]
     logger.info(
@@ -688,6 +697,7 @@ def run() -> None:
         subscriber_client.close()
         if market_runtime is not None:
             market_runtime.close()
+        publisher_client.close()
         conn_manager.close_all()
 
 
