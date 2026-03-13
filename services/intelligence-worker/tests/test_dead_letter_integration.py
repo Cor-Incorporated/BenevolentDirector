@@ -146,7 +146,6 @@ class _InMemoryDeadLetterDB:
         tenant_id: str | None,
         now: datetime,
         limit: int,
-        inclusive_boundary: bool,
     ) -> list[tuple[Any, ...]]:
         def _is_due(row: _DeadLetterRow) -> bool:
             if row.resolved_at is not None:
@@ -157,9 +156,9 @@ class _InMemoryDeadLetterDB:
                 return True
 
             due_at = row.last_retried_at + retry_backoff_for(row.retry_count)
-            if inclusive_boundary:
-                return due_at <= now
-            return due_at < now
+            # Always inclusive (<=) — matches _LOAD_DUE_WITH_TENANT_SQL
+            # after the off-by-one fix.
+            return due_at <= now
 
         due_rows = [
             row
@@ -217,28 +216,29 @@ class _FakeCursor:
             return
 
         if sql == _LOAD_DUE_WITH_TENANT_SQL:
+            # params: (tenant_id, now, limit) matching SQL placeholders
             tenant_id, now, limit = params
             self.rows = self.db.load_due(
                 tenant_id=tenant_id,
                 now=now,
                 limit=limit,
-                inclusive_boundary="<= %s" in sql,
             )
             return
 
         if sql == _LOAD_DUE_ALL_SQL:
+            # params: (now, limit) matching SQL placeholders
             now, limit = params
             self.rows = self.db.load_due(
                 tenant_id=None,
                 now=now,
                 limit=limit,
-                inclusive_boundary="<= %s" in sql,
             )
             return
 
         if "SET retry_count = retry_count + 1" in sql:
-            occurred_at, exceeded_reason, reason, _resolved_at, entry_id = params
-            del exceeded_reason
+            # params: (occurred_at, exceeded_reason, reason, resolved_at, entry_id)
+            # matching UPDATE ... SET retry_count = retry_count + 1 placeholders
+            occurred_at, _exceeded_reason, reason, _resolved_at, entry_id = params
             self.db.mark_retry_failure(
                 entry_id=entry_id,
                 reason=reason,
@@ -430,6 +430,13 @@ class _FakeStopEvent:
 
 @dataclass
 class _FakeConversationRepo:
+    """Single-case fake: returns the same turns regardless of case_id.
+
+    Tests using this fake only seed one case, so case_id filtering is not
+    exercised. If multi-case scenarios are added, this fake must be extended
+    to a dict keyed by case_id.
+    """
+
     turns: list[ConversationTurn]
 
     def load_turns(self, *, tenant_id: str, case_id: str) -> list[ConversationTurn]:
@@ -702,7 +709,7 @@ def test_pubsub_handler_failure_is_acked_and_can_be_replayed_from_dlq() -> None:
     assert [pair.question_text for pair in repository.saved_pairs] == ["対象機能は?"]
 
 
-def test_graceful_shutdown_preserves_unprocessed_message_for_redelivery() -> None:
+def test_handler_exception_nacks_message_for_redelivery() -> None:
     shutdown_event = _FakeStopEvent(flagged=True)
     processed: list[dict[str, Any]] = []
     client = _FakeSubscriberClient()
