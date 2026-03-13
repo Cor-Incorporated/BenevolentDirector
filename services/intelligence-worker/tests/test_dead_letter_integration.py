@@ -543,10 +543,13 @@ def test_retry_processor_applies_backoff_and_stops_at_max_retries() -> None:
     assert row.reason == "llm unavailable"
     assert row.resolved_at is None
 
-    assert store.load_due_events(
-        tenant_id=TENANT_A,
-        now=BASE_TIME + timedelta(minutes=4, seconds=59),
-    ) == []
+    assert (
+        store.load_due_events(
+            tenant_id=TENANT_A,
+            now=BASE_TIME + timedelta(minutes=4, seconds=59),
+        )
+        == []
+    )
 
     second_retry_at = BASE_TIME + timedelta(minutes=5)
     assert processor.run_once(tenant_id=TENANT_A, now=second_retry_at) == 1
@@ -554,10 +557,13 @@ def test_retry_processor_applies_backoff_and_stops_at_max_retries() -> None:
     assert row.last_retried_at == second_retry_at
     assert row.resolved_at is None
 
-    assert store.load_due_events(
-        tenant_id=TENANT_A,
-        now=second_retry_at + timedelta(minutes=29, seconds=59),
-    ) == []
+    assert (
+        store.load_due_events(
+            tenant_id=TENANT_A,
+            now=second_retry_at + timedelta(minutes=29, seconds=59),
+        )
+        == []
+    )
 
     final_retry_at = second_retry_at + timedelta(minutes=30)
     assert processor.run_once(tenant_id=TENANT_A, now=final_retry_at) == 1
@@ -570,10 +576,13 @@ def test_retry_processor_applies_backoff_and_stops_at_max_retries() -> None:
         original_payload,
         original_payload,
     ]
-    assert store.load_due_events(
-        tenant_id=TENANT_A,
-        now=final_retry_at + timedelta(hours=1),
-    ) == []
+    assert (
+        store.load_due_events(
+            tenant_id=TENANT_A,
+            now=final_retry_at + timedelta(hours=1),
+        )
+        == []
+    )
 
 
 def test_load_due_events_respects_tenant_isolation_and_system_scope() -> None:
@@ -776,9 +785,7 @@ def test_run_cancels_subscription_and_closes_resources_on_shutdown() -> None:
     assert subscriber.started is True
     assert subscriber.future.canceled is True
     assert subscriber.init_kwargs["project_id"] == "project-1"
-    assert subscriber.init_kwargs["subscription_id"] == (
-        "conversation-turn-completed"
-    )
+    assert subscriber.init_kwargs["subscription_id"] == ("conversation-turn-completed")
     assert shutdown_event.wait_calls == [None]
     assert subscriber_client.closed is True
     conn_manager.close_all.assert_called_once_with()
