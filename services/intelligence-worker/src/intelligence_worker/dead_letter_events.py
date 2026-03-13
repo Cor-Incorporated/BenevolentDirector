@@ -39,7 +39,7 @@ WHERE tenant_id = %s
               WHEN 2 THEN interval '30 minutes'
               ELSE interval '30 minutes'
           END
-       ) < %s)
+       ) <= %s)
 ORDER BY created_at ASC
 LIMIT %s
 """
@@ -66,7 +66,7 @@ WHERE resolved_at IS NULL
               WHEN 2 THEN interval '30 minutes'
               ELSE interval '30 minutes'
           END
-       ) < %s)
+       ) <= %s)
 ORDER BY created_at ASC
 LIMIT %s
 """
