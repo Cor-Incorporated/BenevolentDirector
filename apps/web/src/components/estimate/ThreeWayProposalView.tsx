@@ -38,16 +38,11 @@ function ContradictionBanner({
   )
 }
 
-function HumanReviewBanner() {
+function ProposalHelpText() {
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
-      <p className="text-sm font-medium text-blue-800">
-        Human review recommended
-      </p>
-      <p className="mt-1 text-sm text-blue-700">
-        This proposal contains market benchmark data and calibration assumptions
-        that should be validated by a domain expert before presenting to the
-        client.
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+      <p className="text-sm text-slate-600">
+        We recommend reviewing proposals with your team before approval.
       </p>
     </div>
   )
@@ -108,7 +103,7 @@ export function ThreeWayProposalView({ proposal }: ThreeWayProposalViewProps) {
         <ContradictionBanner contradictions={contradictions} />
       ) : null}
 
-      <HumanReviewBanner />
+      <ProposalHelpText />
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Column 1: Track Record */}

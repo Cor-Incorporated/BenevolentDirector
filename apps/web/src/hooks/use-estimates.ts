@@ -16,7 +16,6 @@ import type {
 type UseEstimatesReturn = {
   estimates: Estimate[]
   total: number
-  loading: boolean
   isLoading: boolean
   error: string | null
   refresh: () => Promise<void>
@@ -56,12 +55,11 @@ export function useEstimates(caseId?: string): UseEstimatesReturn {
     void refresh()
   }, [refresh])
 
-  return { estimates, total, loading, isLoading: loading, error, refresh }
+  return { estimates, total, isLoading: loading, error, refresh }
 }
 
 type UseEstimateReturn = {
   estimate: EstimateWithProposal | null
-  loading: boolean
   isLoading: boolean
   error: string | null
   refresh: () => Promise<void>
@@ -100,12 +98,10 @@ export function useEstimate(
     void refresh()
   }, [refresh])
 
-  return { estimate, loading, isLoading: loading, error, refresh }
+  return { estimate, isLoading: loading, error, refresh }
 }
 
 type UseCreateEstimateReturn = {
-  create: (input: CreateEstimateInput) => Promise<Estimate | null>
-  loading: boolean
   createEstimate: (input: CreateEstimateInput) => Promise<Estimate | null>
   isSubmitting: boolean
   error: string | null
@@ -139,8 +135,6 @@ export function useCreateEstimate(caseId?: string): UseCreateEstimateReturn {
   )
 
   return {
-    create,
-    loading,
     createEstimate: create,
     isSubmitting: loading,
     error,
@@ -149,7 +143,6 @@ export function useCreateEstimate(caseId?: string): UseCreateEstimateReturn {
 
 type UseThreeWayProposalReturn = {
   proposal: ThreeWayProposal | null
-  loading: boolean
   isLoading: boolean
   error: string | null
   refresh: () => Promise<void>
@@ -188,5 +181,5 @@ export function useThreeWayProposal(
     void refresh()
   }, [refresh])
 
-  return { proposal, loading, isLoading: loading, error, refresh }
+  return { proposal, isLoading: loading, error, refresh }
 }

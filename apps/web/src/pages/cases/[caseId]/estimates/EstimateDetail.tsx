@@ -40,10 +40,10 @@ export function EstimateDetail() {
     caseId: string
     estimateId: string
   }>()
-  const { estimate, loading, error, refresh } = useEstimate(caseId, estimateId)
+  const { estimate, isLoading: loading, error, refresh } = useEstimate(caseId, estimateId)
   const {
     proposal,
-    loading: proposalLoading,
+    isLoading: proposalLoading,
     error: proposalError,
   } = useThreeWayProposal(caseId, estimateId)
 

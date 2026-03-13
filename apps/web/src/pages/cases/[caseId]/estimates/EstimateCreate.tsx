@@ -22,7 +22,7 @@ function validateForm(values: FormValues): FormErrors {
 
   if (!values.yourHourlyRate.trim()) {
     errors.yourHourlyRate = 'Hourly rate is required.'
-  } else if (!Number.isFinite(parsedRate) || parsedRate < 0) {
+  } else if (!Number.isFinite(parsedRate) || parsedRate <= 0) {
     errors.yourHourlyRate = 'Enter a valid hourly rate.'
   }
 
@@ -36,7 +36,7 @@ function validateForm(values: FormValues): FormErrors {
 export function EstimateCreate() {
   const navigate = useNavigate()
   const { caseId } = useParams<{ caseId: string }>()
-  const { create, loading: isSubmitting, error } = useCreateEstimate(caseId)
+  const { createEstimate: create, isSubmitting, error } = useCreateEstimate(caseId)
   const [values, setValues] = useState<FormValues>(initialFormValues)
   const [errors, setErrors] = useState<FormErrors>({})
 

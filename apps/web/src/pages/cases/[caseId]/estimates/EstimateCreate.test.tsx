@@ -35,8 +35,8 @@ describe('EstimateCreate', () => {
 
   it('validates required input before submitting', async () => {
     mockedUseCreateEstimate.mockReturnValue({
-      create: vi.fn(), createEstimate: vi.fn(),
-      loading: false, isSubmitting: false,
+      createEstimate: vi.fn(),
+      isSubmitting: false,
       error: null,
     })
 
@@ -59,8 +59,8 @@ describe('EstimateCreate', () => {
     })
 
     mockedUseCreateEstimate.mockReturnValue({
-      create, createEstimate: create,
-      loading: false, isSubmitting: false,
+      createEstimate: create,
+      isSubmitting: false,
       error: null,
     })
 

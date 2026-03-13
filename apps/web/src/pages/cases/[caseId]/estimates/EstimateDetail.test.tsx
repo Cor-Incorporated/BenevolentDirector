@@ -43,13 +43,13 @@ describe('EstimateDetail', () => {
   it('renders loading state', () => {
     mockedUseEstimate.mockReturnValue({
       estimate: null,
-      loading: true, isLoading: true,
+      isLoading: true,
       error: null,
       refresh: vi.fn(),
     })
     mockedUseThreeWayProposal.mockReturnValue({
       proposal: null,
-      loading: true, isLoading: true,
+      isLoading: true,
       error: null,
       refresh: vi.fn(),
     })
@@ -76,7 +76,7 @@ describe('EstimateDetail', () => {
         your_hourly_rate: 12000,
         risk_flags: ['Evidence variance detected'],
       },
-      loading: false, isLoading: false,
+      isLoading: false,
       error: null,
       refresh: vi.fn(),
     })
@@ -86,7 +86,7 @@ describe('EstimateDetail', () => {
           confidence: 'high',
         },
       },
-      loading: false, isLoading: false,
+      isLoading: false,
       error: null,
       refresh: vi.fn(),
     })

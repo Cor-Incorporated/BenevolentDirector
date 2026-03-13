@@ -34,7 +34,8 @@ export function CitationList({ citations = [] }: CitationListProps) {
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-slate-950">{title}</p>
-                  {citation.url ? (
+                  {citation.url &&
+                  /^https?:\/\//i.test(citation.url) ? (
                     <a
                       href={citation.url}
                       target="_blank"

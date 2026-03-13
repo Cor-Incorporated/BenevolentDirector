@@ -10,7 +10,7 @@ import {
 
 export function EstimateList() {
   const { caseId } = useParams<{ caseId: string }>()
-  const { estimates, total, loading, error } = useEstimates(caseId)
+  const { estimates, total, isLoading: loading, error } = useEstimates(caseId)
   const readyCount = estimates.filter((estimate) => estimate.status === 'ready').length
   const approvedCount = estimates.filter(
     (estimate) => estimate.status === 'approved',

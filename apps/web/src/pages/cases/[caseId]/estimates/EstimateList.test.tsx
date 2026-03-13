@@ -34,7 +34,7 @@ describe('EstimateList', () => {
     mockedUseEstimates.mockReturnValue({
       estimates: [],
       total: 0,
-      loading: false, isLoading: false,
+      isLoading: false,
       error: null,
       refresh: vi.fn(),
     })
@@ -65,7 +65,7 @@ describe('EstimateList', () => {
         },
       ],
       total: 1,
-      loading: false, isLoading: false,
+      isLoading: false,
       error: null,
       refresh: vi.fn(),
     })
