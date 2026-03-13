@@ -137,12 +137,20 @@ export function CaseDetail() {
             </div>
           </div>
 
-          <Link
-            to="/cases"
-            className="inline-flex items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-950"
-          >
-            Back to cases
-          </Link>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link
+              to={`/cases/${caseId!}/estimates`}
+              className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+            >
+              Review estimates
+            </Link>
+            <Link
+              to="/cases"
+              className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-950"
+            >
+              Back to cases
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -176,6 +184,12 @@ export function CaseDetail() {
             {sourceDocuments.length} source docs and {estimates.length}{' '}
             estimates linked to this case.
           </p>
+          <Link
+            to={`/cases/${caseId!}/estimates`}
+            className="mt-4 inline-flex items-center text-sm font-medium text-slate-700 underline underline-offset-2"
+          >
+            Open estimate workspace
+          </Link>
         </article>
       </section>
 
