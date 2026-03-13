@@ -462,9 +462,7 @@ def _coerce_advantages(value: object, *, default: list[str]) -> list[str]:
     if not isinstance(value, list):
         return default
     items = [
-        item.strip()[:500]
-        for item in value
-        if isinstance(item, str) and item.strip()
+        item.strip()[:500] for item in value if isinstance(item, str) and item.strip()
     ]
     return items[:4] or default
 
