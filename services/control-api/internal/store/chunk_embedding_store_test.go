@@ -18,6 +18,9 @@ func TestSQLChunkEmbeddingStore_SearchSimilarChunks(t *testing.T) {
 	chunkID := uuid.New()
 	sourceDocumentID := uuid.New()
 	metadata, _ := json.Marshal(map[string]any{"source_document_id": sourceDocumentID.String(), "token_count": float64(42)})
+	secondChunkID := uuid.New()
+	secondSourceDocumentID := uuid.New()
+	secondMetadata, _ := json.Marshal(map[string]any{"source_document_id": secondSourceDocumentID.String(), "token_count": float64(21)})
 
 	tests := []struct {
 		name           string
@@ -26,6 +29,7 @@ func TestSQLChunkEmbeddingStore_SearchSimilarChunks(t *testing.T) {
 		topK           int
 		mock           func(sqlmock.Sqlmock)
 		wantCount      int
+		wantContents   []string
 		wantErr        string
 	}{
 		{
@@ -43,6 +47,9 @@ func TestSQLChunkEmbeddingStore_SearchSimilarChunks(t *testing.T) {
 					))
 			},
 			wantCount: 1,
+			wantContents: []string{
+				"matched content",
+			},
 		},
 		{
 			name:           "nil case filter uses null arg and float32 embedding",
@@ -57,6 +64,28 @@ func TestSQLChunkEmbeddingStore_SearchSimilarChunks(t *testing.T) {
 					}))
 			},
 			wantCount: 0,
+		},
+		{
+			name:           "large result page preserves order",
+			queryEmbedding: []float64{0.15, 0.25, 0.35},
+			caseID:         &caseID,
+			topK:           2,
+			mock: func(m sqlmock.Sqlmock) {
+				m.ExpectQuery(`SELECT[\s\S]+ORDER BY ce\.vector <=> \$2::vector ASC, dc\.chunk_index ASC, dc\.id ASC[\s\S]+LIMIT \$4`).
+					WithArgs(tenantID, "[0.15,0.25,0.35]", caseID, 2).
+					WillReturnRows(sqlmock.NewRows([]string{
+						"id", "source_id", "file_name", "chunk_index", "content", "metadata_json", "similarity_score",
+					}).AddRow(
+						chunkID, sourceDocumentID, "brief.pdf", 1, "first page result", metadata, 0.99,
+					).AddRow(
+						secondChunkID, secondSourceDocumentID, "appendix.pdf", 2, "second page result", secondMetadata, 0.97,
+					))
+			},
+			wantCount: 2,
+			wantContents: []string{
+				"first page result",
+				"second page result",
+			},
 		},
 		{
 			name:           "db error",
@@ -126,7 +155,14 @@ func TestSQLChunkEmbeddingStore_SearchSimilarChunks(t *testing.T) {
 				if len(results) != tt.wantCount {
 					t.Fatalf("len(results) = %d, want %d", len(results), tt.wantCount)
 				}
-				if tt.wantCount == 1 {
+				if len(tt.wantContents) > 0 {
+					for i, wantContent := range tt.wantContents {
+						if results[i].Content != wantContent {
+							t.Fatalf("results[%d].Content = %q, want %q", i, results[i].Content, wantContent)
+						}
+					}
+				}
+				if tt.name == "happy path with case filter" {
 					if results[0].SimilarityScore != 0.98 {
 						t.Fatalf("SimilarityScore = %v, want 0.98", results[0].SimilarityScore)
 					}
@@ -146,6 +182,68 @@ func TestSQLChunkEmbeddingStore_SearchSimilarChunks(t *testing.T) {
 				t.Fatalf("ExpectationsWereMet() error = %v", err)
 			}
 		})
+	}
+}
+
+func TestSQLChunkEmbeddingStore_SearchSimilarChunksTenantIsolation(t *testing.T) {
+	tenantA := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	tenantB := uuid.MustParse("ffffffff-1111-2222-3333-444444444444")
+	caseID := uuid.New()
+	vector := []float64{0.2, 0.4}
+	chunkA := uuid.New()
+	chunkB := uuid.New()
+	sourceA := uuid.New()
+	sourceB := uuid.New()
+	metaA, _ := json.Marshal(map[string]any{"tenant": "a"})
+	metaB, _ := json.Marshal(map[string]any{"tenant": "b"})
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() error = %v", err)
+	}
+	defer db.Close()
+
+	mock.ExpectQuery(`SELECT[\s\S]+WHERE ce\.tenant_id = \$1[\s\S]+LIMIT \$4`).
+		WithArgs(tenantA, "[0.2,0.4]", caseID, 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "source_id", "file_name", "chunk_index", "content", "metadata_json", "similarity_score",
+		}).AddRow(
+			chunkA, sourceA, "tenant-a.pdf", 0, "tenant-a result", metaA, 0.95,
+		))
+	mock.ExpectQuery(`SELECT[\s\S]+WHERE ce\.tenant_id = \$1[\s\S]+LIMIT \$4`).
+		WithArgs(tenantB, "[0.2,0.4]", caseID, 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "source_id", "file_name", "chunk_index", "content", "metadata_json", "similarity_score",
+		}).AddRow(
+			chunkB, sourceB, "tenant-b.pdf", 0, "tenant-b result", metaB, 0.94,
+		))
+
+	store := NewSQLChunkEmbeddingStore(db)
+
+	resultsA, err := store.SearchSimilarChunks(context.Background(), tenantA, vector, 1, &caseID)
+	if err != nil {
+		t.Fatalf("SearchSimilarChunks() tenantA error = %v", err)
+	}
+	resultsB, err := store.SearchSimilarChunks(context.Background(), tenantB, vector, 1, &caseID)
+	if err != nil {
+		t.Fatalf("SearchSimilarChunks() tenantB error = %v", err)
+	}
+
+	if len(resultsA) != 1 || len(resultsB) != 1 {
+		t.Fatalf("len(resultsA/resultsB) = %d/%d, want 1/1", len(resultsA), len(resultsB))
+	}
+	if resultsA[0].Content != "tenant-a result" {
+		t.Fatalf("tenantA content = %q, want %q", resultsA[0].Content, "tenant-a result")
+	}
+	if resultsB[0].Content != "tenant-b result" {
+		t.Fatalf("tenantB content = %q, want %q", resultsB[0].Content, "tenant-b result")
+	}
+	if resultsA[0].Content == resultsB[0].Content {
+		t.Fatalf("tenant isolation failed, both contents = %q", resultsA[0].Content)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("ExpectationsWereMet() error = %v", err)
 	}
 }
 
