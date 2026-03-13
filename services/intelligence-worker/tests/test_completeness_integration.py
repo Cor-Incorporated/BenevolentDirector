@@ -81,8 +81,7 @@ def test_turn_completed_handler_persists_partial_completeness_feedback_loop() ->
         ConversationTurn(
             role="user",
             content=(
-                "技術スタックは React と TypeScript です。"
-                "予算は 300 万円くらいです。"
+                "技術スタックは React と TypeScript です。予算は 300 万円くらいです。"
             ),
             turn_number=1,
         ),

@@ -205,9 +205,7 @@ def build_tracking_snapshot(
         item for item, status in checklist.items() if status.status == "partial"
     )
     missing_topics = tuple(
-        item
-        for item, status in checklist.items()
-        if status.status == "missing"
+        item for item, status in checklist.items() if status.status == "missing"
     )
     return CompletenessTrackingSnapshot(
         domain=domain,
