@@ -95,6 +95,17 @@ type fakeEstimateStoreForProposalHandler struct {
 	listByCaseFn func(ctx context.Context, tenantID, caseID uuid.UUID, limit, offset int) ([]domain.Estimate, int, error)
 }
 
+type stubProposalTokenVerifier struct {
+	uid   string
+	email string
+	role  string
+	err   error
+}
+
+func (s *stubProposalTokenVerifier) VerifyIDToken(context.Context, string) (string, string, string, error) {
+	return s.uid, s.email, s.role, s.err
+}
+
 func (f *fakeEstimateStoreForProposalHandler) Create(context.Context, *domain.Estimate) (*domain.Estimate, error) {
 	return nil, nil
 }
@@ -222,6 +233,72 @@ func TestProposalHandlerApproveReject(t *testing.T) {
 			}
 			if body["data"]["decision"] != tt.wantDecision {
 				t.Fatalf("decision = %v, want %q", body["data"]["decision"], tt.wantDecision)
+			}
+		})
+	}
+}
+
+func TestProposalHandlerApproveRejectExtractsRoleFromAuthContext(t *testing.T) {
+	tenantID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	caseID := uuid.New()
+	proposalID := uuid.New()
+	wantRole := "director"
+
+	tests := []struct {
+		name string
+		path string
+		body string
+	}{
+		{
+			name: "approve",
+			path: "/v1/cases/" + caseID.String() + "/proposals/" + proposalID.String() + "/approve",
+			body: `{"comment":"approved"}`,
+		},
+		{
+			name: "reject",
+			path: "/v1/cases/" + caseID.String() + "/proposals/" + proposalID.String() + "/reject",
+			body: `{"reason":"missing details"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotRole *string
+			svc := service.NewProposalService(&fakeProposalStore{
+				getByIDFn: func(context.Context, uuid.UUID, uuid.UUID) (*domain.ProposalSession, error) {
+					return &domain.ProposalSession{ID: proposalID, CaseID: caseID, Status: domain.ProposalStatusDraft}, nil
+				},
+				createApprovalDecisionFn: func(_ context.Context, _ uuid.UUID, decision *domain.ApprovalDecision) (*domain.ApprovalDecision, error) {
+					gotRole = decision.DecidedByRole
+					decision.CreatedAt = decision.DecidedAt
+					return decision, nil
+				},
+			}, &fakeEstimateStoreForProposalHandler{})
+			handler := NewProposalHandler(svc)
+
+			mux := http.NewServeMux()
+			RegisterProposalRoutes(mux, handler)
+
+			req := httptest.NewRequest(http.MethodPost, tt.path, bytes.NewBufferString(tt.body))
+			req.Header.Set("Authorization", "Bearer valid-token")
+			req.Header.Set("X-Tenant-ID", tenantID.String())
+			rec := httptest.NewRecorder()
+
+			handlerChain := middleware.AuthWithVerifier(&stubProposalTokenVerifier{
+				uid:   "uid-1",
+				email: "user@example.com",
+				role:  wantRole,
+			})(middleware.Tenant(mux))
+			handlerChain.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+			}
+			if gotRole == nil {
+				t.Fatal("DecidedByRole = nil, want role from auth context")
+			}
+			if *gotRole != wantRole {
+				t.Fatalf("DecidedByRole = %q, want %q", *gotRole, wantRole)
 			}
 		})
 	}

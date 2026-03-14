@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -116,6 +117,24 @@ func TestSQLProposalStoreGetByID(t *testing.T) {
 			wantNil: true,
 		},
 		{
+			name: "wrapped not found",
+			setup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`SELECT id, tenant_id, case_id, estimate_id, status, presented_at, decided_at, created_at, updated_at`).
+					WithArgs(tenantID, proposalID).
+					WillReturnError(errors.New("query failed: " + sql.ErrNoRows.Error()))
+			},
+			wantErr: true,
+		},
+		{
+			name: "wrapped no rows via fmt",
+			setup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`SELECT id, tenant_id, case_id, estimate_id, status, presented_at, decided_at, created_at, updated_at`).
+					WithArgs(tenantID, proposalID).
+					WillReturnError(fmt.Errorf("query failed: %w", sql.ErrNoRows))
+			},
+			wantNil: true,
+		},
+		{
 			name: "query error",
 			setup: func(mock sqlmock.Sqlmock) {
 				mock.ExpectQuery(`SELECT id, tenant_id, case_id, estimate_id, status, presented_at, decided_at, created_at, updated_at`).
@@ -152,6 +171,78 @@ func TestSQLProposalStoreGetByID(t *testing.T) {
 				if got.Status != tt.wantStatus {
 					t.Fatalf("GetByID() status = %q, want %q", got.Status, tt.wantStatus)
 				}
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatalf("ExpectationsWereMet() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestSQLProposalStoreGetCase(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	tenantID := uuid.New()
+	caseID := uuid.New()
+
+	tests := []struct {
+		name    string
+		setup   func(sqlmock.Sqlmock)
+		wantNil bool
+		wantErr bool
+	}{
+		{
+			name: "success",
+			setup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`SELECT id, tenant_id, title, type, status, priority, business_line,`).
+					WithArgs(tenantID, caseID).
+					WillReturnRows(sqlmock.NewRows([]string{
+						"id", "tenant_id", "title", "type", "status", "priority", "business_line",
+						"existing_system_url", "spec_markdown", "contact_name", "contact_email",
+						"company_name", "created_by_uid", "created_at", "updated_at",
+					}).AddRow(caseID, tenantID, "Case A", domain.CaseTypeNewProject, domain.CaseStatusDraft, nil, nil, nil, nil, nil, nil, nil, nil, now, now))
+			},
+		},
+		{
+			name: "wrapped no rows",
+			setup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`SELECT id, tenant_id, title, type, status, priority, business_line,`).
+					WithArgs(tenantID, caseID).
+					WillReturnError(fmt.Errorf("query failed: %w", sql.ErrNoRows))
+			},
+			wantNil: true,
+		},
+		{
+			name: "query error",
+			setup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`SELECT id, tenant_id, title, type, status, priority, business_line,`).
+					WithArgs(tenantID, caseID).
+					WillReturnError(errors.New("db timeout"))
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatalf("sqlmock.New() error = %v", err)
+			}
+			defer db.Close()
+
+			tt.setup(mock)
+
+			store := NewSQLProposalStore(db)
+			got, err := store.GetCase(context.Background(), tenantID, caseID)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("GetCase() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantNil {
+				if got != nil {
+					t.Fatalf("GetCase() = %+v, want nil", got)
+				}
+			} else if !tt.wantErr && got == nil {
+				t.Fatal("GetCase() returned nil")
 			}
 			if err := mock.ExpectationsWereMet(); err != nil {
 				t.Fatalf("ExpectationsWereMet() error = %v", err)

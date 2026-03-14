@@ -65,13 +65,19 @@ func NewFirebaseVerifierWithCredentials(ctx context.Context, projectID, credenti
 	return &FirebaseVerifier{client: client}, nil
 }
 
-// VerifyIDToken verifies a Firebase ID token and returns the user ID and email.
-func (fv *FirebaseVerifier) VerifyIDToken(ctx context.Context, idToken string) (string, string, error) {
+// VerifyIDToken verifies a Firebase ID token and returns the user ID, email, and role.
+func (fv *FirebaseVerifier) VerifyIDToken(ctx context.Context, idToken string) (string, string, string, error) {
 	token, err := fv.client.VerifyIDToken(ctx, idToken)
 	if err != nil {
-		return "", "", fmt.Errorf("verifying id token: %w", err)
+		return "", "", "", fmt.Errorf("verifying id token: %w", err)
 	}
 
-	email, _ := token.Claims["email"].(string)
-	return token.UID, email, nil
+	email := stringClaim(token.Claims["email"])
+	role := stringClaim(token.Claims["role"])
+	return token.UID, email, role, nil
+}
+
+func stringClaim(value any) string {
+	claim, _ := value.(string)
+	return claim
 }

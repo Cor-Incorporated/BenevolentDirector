@@ -116,7 +116,7 @@ func (h *ProposalHandler) Approve(w http.ResponseWriter, r *http.Request) {
 		caseID,
 		proposalID,
 		middleware.UserIDFromContext(r.Context()),
-		"",
+		extractUserRole(r),
 		req.Comment,
 	)
 	if err != nil {
@@ -154,7 +154,7 @@ func (h *ProposalHandler) Reject(w http.ResponseWriter, r *http.Request) {
 		caseID,
 		proposalID,
 		middleware.UserIDFromContext(r.Context()),
-		"",
+		extractUserRole(r),
 		req.Reason,
 	)
 	if err != nil {

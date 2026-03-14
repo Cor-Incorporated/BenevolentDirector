@@ -129,7 +129,7 @@ func (s *SQLProposalStore) GetByID(ctx context.Context, tenantID, proposalID uui
 	)
 
 	record, err := scanProposalSession(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -233,7 +233,7 @@ func (s *SQLProposalStore) GetCase(ctx context.Context, tenantID, caseID uuid.UU
 	)
 
 	record, err := scanCase(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
