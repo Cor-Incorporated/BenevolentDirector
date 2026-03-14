@@ -67,6 +67,16 @@ func parseEvidenceUUID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool)
 	return value, true
 }
 
+// parseProposalUUID extracts and validates the proposal UUID from the request path.
+func parseProposalUUID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	value, err := uuid.Parse(r.PathValue("proposalId"))
+	if err != nil {
+		writeJSONError(w, "invalid proposal ID", http.StatusBadRequest)
+		return uuid.Nil, false
+	}
+	return value, true
+}
+
 // parsePagination extracts limit and offset query parameters with defaults.
 func parsePagination(r *http.Request) (int, int) {
 	limit := 20

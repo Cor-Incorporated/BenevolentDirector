@@ -121,6 +121,11 @@ func main() {
 	estimateHandler := handler.NewEstimateHandler(estimateService)
 	handler.RegisterEstimateRoutes(mux, estimateHandler)
 
+	proposalStore := store.NewSQLProposalStore(db)
+	proposalService := service.NewProposalService(proposalStore, estimateStore)
+	proposalHandler := handler.NewProposalHandler(proposalService)
+	handler.RegisterProposalRoutes(mux, proposalHandler)
+
 	ragSearchStore := store.NewSQLChunkEmbeddingStore(db)
 	ragSearchHandler := handler.NewRAGSearchHandler(ragSearchStore, llm)
 	handler.RegisterRAGSearchRoutes(mux, ragSearchHandler)

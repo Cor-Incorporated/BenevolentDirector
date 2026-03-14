@@ -35,6 +35,24 @@ const (
 	DecisionRejected Decision = "rejected"
 )
 
+// GoNoGoDecision represents the automated go/no-go evaluation outcome.
+type GoNoGoDecision string
+
+const (
+	GoNoGoDecisionGo               GoNoGoDecision = "go"
+	GoNoGoDecisionGoWithConditions GoNoGoDecision = "go_with_conditions"
+	GoNoGoDecisionNoGo             GoNoGoDecision = "no_go"
+)
+
+// IsValid reports whether the go/no-go decision is a recognized value.
+func (d GoNoGoDecision) IsValid() bool {
+	switch d {
+	case GoNoGoDecisionGo, GoNoGoDecisionGoWithConditions, GoNoGoDecisionNoGo:
+		return true
+	}
+	return false
+}
+
 // IsValid reports whether the decision is a recognized value.
 func (d Decision) IsValid() bool {
 	switch d {
@@ -68,4 +86,13 @@ type ApprovalDecision struct {
 	Comment       *string   `json:"comment,omitempty"`
 	DecidedAt     time.Time `json:"decided_at"`
 	CreatedAt     time.Time `json:"created_at"`
+}
+
+// GoNoGoResult captures the evaluation payload returned by the proposal workflow.
+type GoNoGoResult struct {
+	Decision           GoNoGoDecision     `json:"decision"`
+	Scores             map[string]float64 `json:"scores"`
+	Weights            map[string]float64 `json:"weights"`
+	Reasoning          string             `json:"reasoning"`
+	BigQueryAdjustment *float64           `json:"bigquery_adjustment,omitempty"`
 }
