@@ -12,11 +12,12 @@ import (
 type fakeTokenVerifier struct {
 	uid   string
 	email string
+	role  string
 	err   error
 }
 
-func (f *fakeTokenVerifier) VerifyIDToken(_ context.Context, _ string) (string, string, error) {
-	return f.uid, f.email, f.err
+func (f *fakeTokenVerifier) VerifyIDToken(_ context.Context, _ string) (string, string, string, error) {
+	return f.uid, f.email, f.role, f.err
 }
 
 func TestAuthWithVerifier_MissingAuthorizationHeader(t *testing.T) {
@@ -81,12 +82,13 @@ func TestAuthWithVerifier_InvalidToken(t *testing.T) {
 }
 
 func TestAuthWithVerifier_ValidToken(t *testing.T) {
-	verifier := &fakeTokenVerifier{uid: "firebase-uid-123", email: "user@example.com"}
+	verifier := &fakeTokenVerifier{uid: "firebase-uid-123", email: "user@example.com", role: "director"}
 
-	var gotUID, gotEmail string
+	var gotUID, gotEmail, gotRole string
 	handler := AuthWithVerifier(verifier)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotUID = UserIDFromContext(r.Context())
 		gotEmail = UserEmailFromContext(r.Context())
+		gotRole = UserRoleFromContext(r.Context())
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -103,6 +105,9 @@ func TestAuthWithVerifier_ValidToken(t *testing.T) {
 	}
 	if gotEmail != "user@example.com" {
 		t.Errorf("UserEmailFromContext() = %q, want %q", gotEmail, "user@example.com")
+	}
+	if gotRole != "director" {
+		t.Errorf("UserRoleFromContext() = %q, want %q", gotRole, "director")
 	}
 }
 
@@ -148,6 +153,13 @@ func TestUserEmailFromContext_EmptyContext(t *testing.T) {
 	ctx := context.Background()
 	if got := UserEmailFromContext(ctx); got != "" {
 		t.Errorf("UserEmailFromContext() = %q, want empty string", got)
+	}
+}
+
+func TestUserRoleFromContext_EmptyContext(t *testing.T) {
+	ctx := context.Background()
+	if got := UserRoleFromContext(ctx); got != "" {
+		t.Errorf("UserRoleFromContext() = %q, want empty string", got)
 	}
 }
 

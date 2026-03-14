@@ -67,6 +67,24 @@ func parseEvidenceUUID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool)
 	return value, true
 }
 
+// parseProposalUUID extracts and validates the proposal UUID from the request path.
+func parseProposalUUID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	value, err := uuid.Parse(r.PathValue("proposalId"))
+	if err != nil {
+		writeJSONError(w, "invalid proposal ID", http.StatusBadRequest)
+		return uuid.Nil, false
+	}
+	return value, true
+}
+
+// extractUserRole reads the authenticated user's role from request context.
+func extractUserRole(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	return strings.TrimSpace(middleware.UserRoleFromContext(r.Context()))
+}
+
 // parsePagination extracts limit and offset query parameters with defaults.
 func parsePagination(r *http.Request) (int, int) {
 	limit := 20
