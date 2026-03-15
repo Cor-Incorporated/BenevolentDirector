@@ -144,15 +144,16 @@ func (c *Client) mutate(ctx context.Context, query string, variables map[string]
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode >= http.StatusBadRequest {
+		return fmt.Errorf("Linear GraphQL request failed with status %d", resp.StatusCode)
+	}
+
 	var envelope graphQLResponse
 	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
 		return fmt.Errorf("decode Linear GraphQL response: %w", err)
 	}
 	if len(envelope.Errors) > 0 {
 		return fmt.Errorf("Linear GraphQL error: %s", joinGraphQLErrors(envelope.Errors))
-	}
-	if resp.StatusCode >= http.StatusBadRequest {
-		return fmt.Errorf("Linear GraphQL request failed with status %d", resp.StatusCode)
 	}
 	if target == nil {
 		return nil
