@@ -17,6 +17,8 @@ import (
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/estimateevent"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/github"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/handler"
+	"github.com/Cor-Incorporated/Grift/services/control-api/internal/handoffevent"
+	linearapi "github.com/Cor-Incorporated/Grift/services/control-api/internal/linear"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/llmclient"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/marketevent"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/middleware"
@@ -125,6 +127,22 @@ func main() {
 	proposalService := service.NewProposalService(proposalStore, estimateStore)
 	proposalHandler := handler.NewProposalHandler(proposalService)
 	handler.RegisterProposalRoutes(mux, proposalHandler)
+
+	handoffStore := store.NewSQLHandoffStore(db)
+	var handoffPublisher *handoffevent.Publisher
+	if pubsubClient != nil {
+		handoffPublisher = handoffevent.NewPublisher(
+			conversation.NewPubSubPublisher(pubsubClient),
+			os.Getenv("HANDOFF_PUBSUB_TOPIC"),
+		)
+	}
+	var linearClient service.LinearClient
+	if apiKey := os.Getenv("LINEAR_API_KEY"); apiKey != "" {
+		linearClient = linearapi.NewClient(apiKey, os.Getenv("LINEAR_DEFAULT_TEAM_ID"), nil)
+	}
+	handoffService := service.NewHandoffService(handoffStore, estimateStore, linearClient, handoffPublisher)
+	handoffHandler := handler.NewHandoffHandler(handoffService)
+	handler.RegisterHandoffRoutes(mux, handoffHandler)
 
 	ragSearchStore := store.NewSQLChunkEmbeddingStore(db)
 	ragSearchHandler := handler.NewRAGSearchHandler(ragSearchStore, llm)
