@@ -106,29 +106,46 @@ Qwen3.5 を直接叩くのは禁止する。
 1. Restricted データ（日本語会話・顧客資料）
    - GKE + vLLM 上の Qwen3.5 に送る
 2. 軽量分類
-   - `Qwen3.5-9B`（常駐、~5GB VRAM）
+   - `Qwen3.5-9B`（常駐、fp16 ~18GB VRAM）
 3. 高精度な内部生成
-   - `Qwen3.5-35B-A3B`（オンデマンド、~20GB Q4）
+   - `Qwen3.5-35B-A3B`（オンデマンド、GPTQ Int4 ~20GB VRAM）
 4. Market Intelligence 検索結果の構造化
-   - `GLM-4.7-Flash`（オンデマンド、~16GB Q4）
+   - `GLM-4.7-Flash`（オンデマンド、fp16 ~50GB VRAM ※全パラメータロード）
 5. 外部検索や引用が必要
    - クラウド LLM を使う
 
+**VRAM 実測値（2026-03-16 PoC 検証）**:
+
+| モデル | 形式 | VRAM 実測 | 補足 |
+|--------|------|----------|------|
+| Qwen3.5-9B | fp16 (safetensors) | 17.66GB | tensor_parallel=2 で L4 ×2 に分散 |
+| Qwen3.5-35B-A3B | GPTQ Int4 | ~20GB | 公式量子化版 `Qwen/Qwen3.5-35B-A3B-GPTQ-Int4` |
+| GLM-4.7-Flash | fp16 (MoE 30B) | ~50GB | アクティブ 3B だが全パラメータロード必要 |
+
 ### マルチモデル時分割運用
 
-`Qwen3.5-35B-A3B` と `GLM-4.7-Flash` は同一 L4 GPU 上で時分割運用する。両モデルを同時にロードしない。
+`Qwen3.5-35B-A3B` と `GLM-4.7-Flash` は L4 ×2 (48GB) 上で時分割運用する。両モデルを同時にロードしない。
 
 - `llm-gateway` がリクエストの `task_type` に基づき使用モデルを決定する
 - モデル切り替え時はアイドル状態のモデルをアンロード → 新モデルをロード
 - Market Intelligence は Pub/Sub 非同期タスクのため、切り替えレイテンシ（数十秒）は許容範囲
-- 常駐する `Qwen3.5-9B` は別プロセスで軽量に動作し、切り替えの影響を受けない
+- 常駐する `Qwen3.5-9B` は tensor_parallel=2 で L4 ×2 に分散ロードし、切り替えの影響を受けない
+- GLM-4.7-Flash (50GB fp16) は L4 ×2 (48GB) に収まらない可能性があり、AWQ 量子化版の検討が必要
+
+**GPU 構成（2026-03-16 PoC 確定）**:
+
+- g2-standard-24 (L4 ×2, VRAM 48GB 合計)
+- On-demand (Spot L4 は asia-northeast1 で確保困難)
+- tensor_parallel=2 でデュアル GPU 推論
+- PVC 150Gi (3モデル格納: ~98GB)
 
 GLM-4.7-Flash の選定根拠（ADR-0001 参照）:
 
-- 30B-A3B MoE（アクティブ 3B）で Qwen と同一 GPU リソースで動作
+- 30B-A3B MoE（アクティブ 3B）だが全パラメータロードで ~50GB VRAM
 - エージェントタスク（tau2-Bench: 79.5）、Web 検索結果の構造化（BrowseComp: 42.8）で優位
 - MIT ライセンス
-- vLLM サポート済み（main ブランチ）
+- vLLM v0.17+ でサポート（Day-0 サポート）
+- L4 ×2 での動作は AWQ 量子化が必要（fp16 では 48GB を超える可能性）
 
 ### PoC 順序
 
