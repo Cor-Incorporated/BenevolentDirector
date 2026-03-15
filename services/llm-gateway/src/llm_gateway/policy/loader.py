@@ -56,7 +56,7 @@ def _resolve_policy_path(path: Path | None) -> Path:
     if raw:
         candidates.append(Path(raw))
 
-    repo_root = Path(__file__).resolve().parents[4]
+    repo_root = Path(__file__).resolve().parents[5]
     candidates.append(repo_root / DEFAULT_POLICY_PATH)
     candidates.append(Path.cwd() / DEFAULT_POLICY_PATH)
 

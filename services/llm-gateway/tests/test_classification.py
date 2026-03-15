@@ -3,9 +3,6 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from fastapi.testclient import TestClient
-
-from llm_gateway.main import create_app
 from llm_gateway.policy.loader import get_tenant_policy, load_policy
 
 if TYPE_CHECKING:
@@ -57,9 +54,21 @@ def test_get_tenant_policy_falls_back_to_default(monkeypatch, tmp_path: Path) ->
     assert default_policy.allowed_levels == ["restricted"]
 
 
+def test_load_policy_uses_repo_default_stub(monkeypatch) -> None:
+    monkeypatch.delenv("CLASSIFICATION_POLICY_PATH", raising=False)
+
+    policy = load_policy()
+
+    assert policy.default.allowed_levels == ["restricted"]
+
+
 def test_classification_middleware_blocks_disallowed_tenant_level(
     monkeypatch, tmp_path: Path
 ) -> None:
+    from fastapi.testclient import TestClient
+
+    from llm_gateway.main import create_app
+
     policy_path = tmp_path / "policy.yaml"
     _write_policy(policy_path)
     monkeypatch.setenv("CLASSIFICATION_POLICY_PATH", str(policy_path))
@@ -76,6 +85,10 @@ def test_classification_middleware_blocks_disallowed_tenant_level(
 
 
 def test_classification_middleware_skips_healthz() -> None:
+    from fastapi.testclient import TestClient
+
+    from llm_gateway.main import create_app
+
     client = TestClient(create_app())
 
     response = client.get(
