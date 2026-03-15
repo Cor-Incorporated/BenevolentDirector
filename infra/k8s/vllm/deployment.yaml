@@ -30,7 +30,7 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
         - name: vllm
-          image: vllm/vllm-openai:v0.6.6
+          image: vllm/vllm-openai:v0.17.1
           args:
             - "--model"
             - "$(MODEL_NAME)"
@@ -44,6 +44,10 @@ spec:
             - "$(SERVED_MODEL_NAME)"
             - "--max-num-seqs"
             - "$(MAX_NUM_SEQS)"
+            - "--tensor-parallel-size"
+            - "2"
+            - "--default-chat-template-kwargs"
+            - '{"enable_thinking": false}'
           envFrom:
             - configMapRef:
                 name: vllm-config
@@ -60,13 +64,13 @@ spec:
               protocol: TCP
           resources:
             requests:
-              nvidia.com/gpu: 1
-              memory: "16Gi"
-              cpu: "4"
-            limits:
-              nvidia.com/gpu: 1
-              memory: "24Gi"
+              nvidia.com/gpu: 2
+              memory: "32Gi"
               cpu: "8"
+            limits:
+              nvidia.com/gpu: 2
+              memory: "64Gi"
+              cpu: "16"
           startupProbe:
             httpGet:
               path: /health

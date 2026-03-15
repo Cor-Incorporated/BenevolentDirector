@@ -213,18 +213,19 @@ module "gke_gpu" {
   network_id        = module.networking.network_id
   private_subnet_id = module.networking.private_subnet_id
 
-  # Dev: L4 GPU with Spot instances, minimal scaling
-  gpu_machine_type      = "g2-standard-8"
+  # Dev: L4 ×2 (48GB VRAM) for Qwen3.5-35B-A3B + GLM-4.7-Flash hybrid (ADR-0011)
+  gpu_machine_type      = "g2-standard-24"
   gpu_accelerator_type  = "nvidia-l4"
-  gpu_accelerator_count = 1
+  gpu_accelerator_count = 2
   max_node_count        = 1
-  min_node_count        = 0
-  enable_spot           = true
-  disk_size_gb          = 100
+  min_node_count        = 1
+  enable_spot           = false
+  disk_size_gb          = 200
 
-  # Dev: VPC-internal only (GHA runners and Cloud Build operate within VPC)
+  # Dev: VPC-internal + developer local access
   master_authorized_cidr_blocks = [
     { cidr_block = "10.0.0.0/8", display_name = "internal-vpc" },
+    { cidr_block = "60.83.86.16/32", display_name = "dev-local" },
   ]
 
   # Night/weekend shutdown for cost optimization (Issue #90)

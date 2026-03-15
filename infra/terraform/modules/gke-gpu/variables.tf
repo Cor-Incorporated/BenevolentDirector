@@ -87,7 +87,7 @@ variable "gpu_machine_type" {
   default     = "g2-standard-8"
 
   validation {
-    condition     = contains(["g2-standard-8", "g2-standard-12", "g2-standard-16", "a2-highgpu-1g", "a2-highgpu-2g"], var.gpu_machine_type)
+    condition     = contains(["g2-standard-4", "g2-standard-8", "g2-standard-12", "g2-standard-16", "g2-standard-24", "g2-standard-32", "g2-standard-48", "a2-highgpu-1g", "a2-highgpu-2g", "a2-ultragpu-1g"], var.gpu_machine_type)
     error_message = "gpu_machine_type must be a valid GPU-capable machine type."
   }
 }

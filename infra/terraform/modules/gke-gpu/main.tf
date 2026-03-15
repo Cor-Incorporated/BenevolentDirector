@@ -275,7 +275,8 @@ resource "google_project_iam_custom_role" "gpu_scheduler_role" {
   description = "Least-privilege role for reading cluster state and resizing GPU node pools"
   permissions = [
     "container.clusters.get",
-    "container.nodePools.update",
+    "container.operations.get",
+    "container.operations.list",
   ]
 }
 
