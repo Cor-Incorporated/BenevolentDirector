@@ -222,11 +222,11 @@ module "gke_gpu" {
   enable_spot           = false
   disk_size_gb          = 200
 
-  # Dev: VPC-internal + developer local access
-  master_authorized_cidr_blocks = [
-    { cidr_block = "10.0.0.0/8", display_name = "internal-vpc" },
-    { cidr_block = "60.83.86.16/32", display_name = "dev-local" },
-  ]
+  # Dev: VPC-internal + developer local access (IPs via TF_VAR_developer_cidr_blocks)
+  master_authorized_cidr_blocks = concat(
+    [{ cidr_block = "10.0.0.0/8", display_name = "internal-vpc" }],
+    [for idx, cidr in var.developer_cidr_blocks : { cidr_block = "${cidr}/32", display_name = "dev-${idx}" }],
+  )
 
   # Night/weekend shutdown for cost optimization (Issue #90)
   enable_night_shutdown = true
