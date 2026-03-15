@@ -225,7 +225,7 @@ module "gke_gpu" {
   # Dev: VPC-internal + developer local access (IPs via TF_VAR_developer_cidr_blocks)
   master_authorized_cidr_blocks = concat(
     [{ cidr_block = "10.0.0.0/8", display_name = "internal-vpc" }],
-    [for idx, cidr in var.developer_cidr_blocks : { cidr_block = "${cidr}/32", display_name = "dev-${idx}" }],
+    [for idx, ip in var.developer_cidr_blocks : { cidr_block = ip, display_name = "dev-${idx}" }],
   )
 
   # Night/weekend shutdown for cost optimization (Issue #90)

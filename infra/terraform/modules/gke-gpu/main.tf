@@ -276,6 +276,8 @@ resource "google_project_iam_custom_role" "gpu_scheduler_role" {
   permissions = [
     "container.clusters.get",
     "container.clusters.update",
+    "container.nodePools.get",
+    "container.nodePools.update",
     "container.operations.get",
     "container.operations.list",
   ]

@@ -10,7 +10,12 @@ variable "region" {
 }
 
 variable "developer_cidr_blocks" {
-  description = "Developer IP CIDR blocks for GKE master access (pass via .tfvars or TF_VAR_)"
+  description = "Developer CIDR blocks for GKE master access (e.g. [\"203.0.113.5/32\"]). Pass via TF_VAR_developer_cidr_blocks to avoid committing IPs."
   type        = list(string)
   default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.developer_cidr_blocks : can(cidrhost(cidr, 0))])
+    error_message = "Each entry must be a valid CIDR block (e.g. \"203.0.113.5/32\")."
+  }
 }
