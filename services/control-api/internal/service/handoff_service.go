@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/domain"
-	linearapi "github.com/Cor-Incorporated/Grift/services/control-api/internal/linear"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/middleware"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/store"
 	"github.com/google/uuid"
@@ -18,32 +17,24 @@ import (
 // ErrIdempotencyConflict indicates an idempotency key collision for a different handoff.
 var ErrIdempotencyConflict = errors.New("idempotency_key already used for a different handoff")
 
-// LinearClient defines the Linear mutations used by handoff orchestration.
-type LinearClient interface {
-	CreateProject(ctx context.Context, teamID, name string) (*linearapi.LinearProject, error)
-	CreateCycle(ctx context.Context, projectID, name string) (*linearapi.LinearCycle, error)
-	CreateIssue(ctx context.Context, teamID, projectID, title, description string) (*linearapi.LinearIssue, error)
-}
-
 // EventPublisher publishes handoff workflow events.
 type EventPublisher interface {
 	PublishHandoffInitiated(ctx context.Context, handoff *domain.HandoffPackage) error
 }
 
 // HandoffService handles handoff creation and retrieval.
+// TODO: Add LinearClient field when intelligence-worker triggers Linear sync via HandoffInitiated event.
 type HandoffService struct {
 	store     store.HandoffStore
 	estimates store.EstimateStore
-	linear    LinearClient
 	publisher EventPublisher
 }
 
 // NewHandoffService constructs a HandoffService.
-func NewHandoffService(s store.HandoffStore, estimates store.EstimateStore, linear LinearClient, publisher EventPublisher) *HandoffService {
+func NewHandoffService(s store.HandoffStore, estimates store.EstimateStore, publisher EventPublisher) *HandoffService {
 	return &HandoffService{
 		store:     s,
 		estimates: estimates,
-		linear:    linear,
 		publisher: publisher,
 	}
 }

@@ -94,7 +94,7 @@ func TestHandoffHandlerCreateAccepted(t *testing.T) {
 		getByIDFn: func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (*domain.Estimate, error) {
 			return &domain.Estimate{ID: estimateID}, nil
 		},
-	}, nil, nil)
+	}, nil)
 	handler := NewHandoffHandler(svc)
 
 	mux := http.NewServeMux()
@@ -116,7 +116,7 @@ func TestHandoffHandlerCreateInvalidIdempotencyKey(t *testing.T) {
 	caseID := uuid.New()
 	estimateID := uuid.New()
 
-	svc := service.NewHandoffService(&fakeHandoffStore{}, &fakeEstimateStoreForHandoffHandler{}, nil, nil)
+	svc := service.NewHandoffService(&fakeHandoffStore{}, &fakeEstimateStoreForHandoffHandler{}, nil)
 	handler := NewHandoffHandler(svc)
 	mux := http.NewServeMux()
 	RegisterHandoffRoutes(mux, handler)
@@ -152,7 +152,7 @@ func TestHandoffHandlerGetStatus(t *testing.T) {
 		listIssueMappingsFn: func(context.Context, uuid.UUID) ([]domain.HandoffIssueMapping, error) {
 			return []domain.HandoffIssueMapping{{ModuleName: "billing", LinearIssueURL: &issueURL}}, nil
 		},
-	}, &fakeEstimateStoreForHandoffHandler{}, nil, nil)
+	}, &fakeEstimateStoreForHandoffHandler{}, nil)
 	handler := NewHandoffHandler(svc)
 
 	mux := http.NewServeMux()
@@ -181,7 +181,7 @@ func TestHandoffHandlerGetStatusNotFound(t *testing.T) {
 	tenantID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 	caseID := uuid.New()
 
-	svc := service.NewHandoffService(&fakeHandoffStore{}, &fakeEstimateStoreForHandoffHandler{}, nil, nil)
+	svc := service.NewHandoffService(&fakeHandoffStore{}, &fakeEstimateStoreForHandoffHandler{}, nil)
 	handler := NewHandoffHandler(svc)
 	mux := http.NewServeMux()
 	RegisterHandoffRoutes(mux, handler)

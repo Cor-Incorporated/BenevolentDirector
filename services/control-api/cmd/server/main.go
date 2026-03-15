@@ -18,7 +18,6 @@ import (
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/github"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/handler"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/handoffevent"
-	linearapi "github.com/Cor-Incorporated/Grift/services/control-api/internal/linear"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/llmclient"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/marketevent"
 	"github.com/Cor-Incorporated/Grift/services/control-api/internal/middleware"
@@ -136,11 +135,8 @@ func main() {
 			os.Getenv("HANDOFF_PUBSUB_TOPIC"),
 		)
 	}
-	var linearClient service.LinearClient
-	if apiKey := os.Getenv("LINEAR_API_KEY"); apiKey != "" {
-		linearClient = linearapi.NewClient(apiKey, os.Getenv("LINEAR_DEFAULT_TEAM_ID"), nil)
-	}
-	handoffService := service.NewHandoffService(handoffStore, estimateStore, linearClient, handoffPublisher)
+	// TODO: Wire LinearClient when intelligence-worker triggers Linear sync via HandoffInitiated.
+	handoffService := service.NewHandoffService(handoffStore, estimateStore, handoffPublisher)
 	handoffHandler := handler.NewHandoffHandler(handoffService)
 	handler.RegisterHandoffRoutes(mux, handoffHandler)
 

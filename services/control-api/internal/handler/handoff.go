@@ -88,7 +88,7 @@ func writeHandoffCreateError(w http.ResponseWriter, err error) {
 	case errors.Is(err, service.ErrNotFound):
 		writeJSONError(w, "estimate not found", http.StatusBadRequest)
 	case errors.Is(err, service.ErrIdempotencyConflict):
-		writeJSONError(w, err.Error(), http.StatusBadRequest)
+		writeJSONError(w, err.Error(), http.StatusConflict)
 	default:
 		writeJSONError(w, "failed to create handoff", http.StatusInternalServerError)
 	}

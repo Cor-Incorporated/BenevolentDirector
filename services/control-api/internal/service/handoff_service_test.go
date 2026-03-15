@@ -136,7 +136,7 @@ func TestHandoffServiceCreate(t *testing.T) {
 			},
 		}
 
-		svc := NewHandoffService(store, estimates, nil, publisher)
+		svc := NewHandoffService(store, estimates, publisher)
 		ctx := withTenantContext(t, tenantID)
 		got, err := svc.Create(ctx, caseID, estimateID, key)
 		if err != nil {
@@ -156,7 +156,7 @@ func TestHandoffServiceCreate(t *testing.T) {
 			getByIdempotencyKeyFn: func(context.Context, uuid.UUID) (*domain.HandoffPackage, error) {
 				return existing, nil
 			},
-		}, &mockEstimateStoreForHandoff{}, nil, nil)
+		}, &mockEstimateStoreForHandoff{}, nil)
 
 		got, err := svc.Create(withTenantContext(t, tenantID), caseID, estimateID, key)
 		if err != nil {
@@ -173,7 +173,7 @@ func TestHandoffServiceCreate(t *testing.T) {
 			getByIdempotencyKeyFn: func(context.Context, uuid.UUID) (*domain.HandoffPackage, error) {
 				return existing, nil
 			},
-		}, &mockEstimateStoreForHandoff{}, nil, nil)
+		}, &mockEstimateStoreForHandoff{}, nil)
 
 		_, err := svc.Create(withTenantContext(t, tenantID), caseID, estimateID, key)
 		if !errors.Is(err, ErrIdempotencyConflict) {
@@ -186,7 +186,7 @@ func TestHandoffServiceCreate(t *testing.T) {
 			getByIDFn: func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (*domain.Estimate, error) {
 				return nil, nil
 			},
-		}, nil, nil)
+		}, nil)
 
 		_, err := svc.Create(withTenantContext(t, tenantID), caseID, estimateID, key)
 		if !errors.Is(err, ErrNotFound) {
@@ -199,7 +199,7 @@ func TestHandoffServiceCreate(t *testing.T) {
 			getByIDFn: func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (*domain.Estimate, error) {
 				return &domain.Estimate{ID: estimateID}, nil
 			},
-		}, nil, &mockHandoffPublisher{
+		}, &mockHandoffPublisher{
 			publishFn: func(context.Context, *domain.HandoffPackage) error {
 				return errors.New("pubsub unavailable")
 			},
@@ -229,7 +229,7 @@ func TestHandoffServiceCreate(t *testing.T) {
 			getByIDFn: func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (*domain.Estimate, error) {
 				return &domain.Estimate{ID: estimateID}, nil
 			},
-		}, nil, nil)
+		}, nil)
 
 		got, err := svc.Create(withTenantContext(t, tenantID), caseID, estimateID, key)
 		if err != nil {
@@ -254,7 +254,7 @@ func TestHandoffServiceGetByCaseID(t *testing.T) {
 			listIssueMappingsFn: func(context.Context, uuid.UUID) ([]domain.HandoffIssueMapping, error) {
 				return []domain.HandoffIssueMapping{{ModuleName: "billing", LinearIssueID: &issueID}}, nil
 			},
-		}, &mockEstimateStoreForHandoff{}, nil, nil)
+		}, &mockEstimateStoreForHandoff{}, nil)
 
 		handoff, mappings, err := svc.GetByCaseID(context.Background(), caseID)
 		if err != nil {
@@ -266,7 +266,7 @@ func TestHandoffServiceGetByCaseID(t *testing.T) {
 	})
 
 	t.Run("returns not found", func(t *testing.T) {
-		svc := NewHandoffService(&mockHandoffStore{}, &mockEstimateStoreForHandoff{}, nil, nil)
+		svc := NewHandoffService(&mockHandoffStore{}, &mockEstimateStoreForHandoff{}, nil)
 		_, _, err := svc.GetByCaseID(context.Background(), caseID)
 		if !errors.Is(err, ErrNotFound) {
 			t.Fatalf("GetByCaseID() error = %v, want %v", err, ErrNotFound)

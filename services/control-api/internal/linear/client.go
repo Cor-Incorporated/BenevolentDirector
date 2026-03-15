@@ -57,7 +57,12 @@ func (c *Client) CreateProject(ctx context.Context, teamID, name string) (*Linea
 }
 
 // CreateCycle creates a Linear cycle under the given team.
-func (c *Client) CreateCycle(ctx context.Context, projectID, name string) (*LinearCycle, error) {
+// Linear requires teamId, startsAt, and endsAt for cycle creation.
+func (c *Client) CreateCycle(ctx context.Context, teamID, name, startsAt, endsAt string) (*LinearCycle, error) {
+	resolvedTeamID, err := c.requireTeamID(teamID)
+	if err != nil {
+		return nil, err
+	}
 	var data struct {
 		CycleCreate struct {
 			Success bool        `json:"success"`
@@ -66,8 +71,10 @@ func (c *Client) CreateCycle(ctx context.Context, projectID, name string) (*Line
 	}
 	variables := map[string]any{
 		"input": map[string]any{
-			"name":      name,
-			"projectId": projectID,
+			"name":     name,
+			"teamId":   resolvedTeamID,
+			"startsAt": startsAt,
+			"endsAt":   endsAt,
 		},
 	}
 	if err := c.mutate(ctx, cycleCreateMutation, variables, &data); err != nil {

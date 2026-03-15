@@ -79,7 +79,7 @@ func TestClientCreateCycle(t *testing.T) {
 		})
 	})
 
-	cycle, err := client.CreateCycle(context.Background(), "project-1", "Sprint 1")
+	cycle, err := client.CreateCycle(context.Background(), "", "Sprint 1", "2026-04-01", "2026-04-14")
 	if err != nil {
 		t.Fatalf("CreateCycle() error = %v", err)
 	}
